@@ -142,6 +142,14 @@ JobOps passes this token to the Docker build as a BuildKit secret only for the
 Camoufox download step. It is not stored in the runtime container
 environment.
 
+**Building locally on Kiri (Windows):** Kiri cannot mount images with many
+overlay layers, and the JobOps Dockerfile produces about 64. A
+`docker compose up -d --build` therefore succeeds but the container fails with
+`mount .../rootfs: No such file or directory`. From a source checkout, run
+`npm run docker:rebuild:kiri` instead. It builds from the Dockerfile, flattens
+the result to two layers, recreates the container, and waits for it to become
+healthy.
+
 ## 2) Access the app and onboard
 
 Open:

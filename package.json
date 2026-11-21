@@ -24,7 +24,8 @@
     "typst-theme:generate": "node ./scripts/generate-typst-themes.mjs",
     "typst-theme:validate": "node ./scripts/generate-typst-themes.mjs --check && npm --workspace orchestrator run test:run -- src/server/services/resume-renderer/typst.test.ts",
     "release:set-version": "node ./scripts/set-orchestrator-version.mjs",
-    "knip": "knip"
+    "knip": "knip",
+    "docker:rebuild:kiri": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kiri-rebuild.ps1"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

@@ -53,6 +53,8 @@ docker compose up -d
 
 Open `http://localhost:3005` and follow the onboarding wizard. You'll be searching in under 10 minutes.
 
+> **Building locally on Kiri (Windows):** Kiri cannot mount images with many overlay layers, so `docker compose up -d --build` builds but the container fails to start. Use `npm run docker:rebuild:kiri` instead. It builds from the Dockerfile, flattens the result to two layers, and recreates the container.
+
 Sign-in uses JobOps accounts by default, and can also use Google, GitHub, or any OpenID Connect provider — see the [SSO Setup Guide](https://jobops.dakheera47.com/docs/next/getting-started/sso-setup).
 
 ---
