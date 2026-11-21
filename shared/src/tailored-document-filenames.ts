@@ -33,3 +33,10 @@ export function tailoredCoverLetterFilename(
 ): string {
   return `${safeDocumentPart(ownerName, APPLICATION_DOCUMENT_OWNER)} Cover Letter ${safeDocumentPart(companyName, "Company")}.txt`;
 }
+
+/** PDF counterpart of a generated plain-text cover letter filename. */
+export function coverLetterPdfFilename(textFilename: string): string {
+  return /\.txt$/i.test(textFilename)
+    ? `${textFilename.slice(0, -4)}.pdf`
+    : `${textFilename}.pdf`;
+}

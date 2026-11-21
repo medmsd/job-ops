@@ -1,6 +1,8 @@
 import * as api from "@client/api";
+import { buildCoverLetterPdf } from "@client/lib/cover-letter-pdf";
+import { coverLetterPdfFilename } from "@shared/tailored-document-filenames.js";
 import type { JobCoverLetterResult } from "@shared/types.js";
-import { Download, Loader2, RefreshCcw } from "lucide-react";
+import { Download, FileText, Loader2, RefreshCcw } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,8 +26,7 @@ interface CoverLetterModalProps {
   employer?: string | null;
 }
 
-function downloadTextFile(contents: string, filename: string): void {
-  const blob = new Blob([contents], { type: "text/plain;charset=utf-8" });
+function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -34,6 +35,13 @@ function downloadTextFile(contents: string, filename: string): void {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function downloadTextFile(contents: string, filename: string): void {
+  downloadBlob(
+    new Blob([contents], { type: "text/plain;charset=utf-8" }),
+    filename,
+  );
 }
 
 export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
@@ -77,10 +85,19 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
     void generate();
   }, [generate, open]);
 
-  const handleDownload = () => {
+  const handleDownloadTxt = () => {
     if (!letter.trim()) return;
     downloadTextFile(letter, result?.filename ?? "cover-letter.txt");
     toast.success("Cover letter downloaded");
+  };
+
+  const handleDownloadPdf = () => {
+    if (!letter.trim()) return;
+    downloadBlob(
+      buildCoverLetterPdf(letter),
+      coverLetterPdfFilename(result?.filename ?? "cover-letter.txt"),
+    );
+    toast.success("Cover letter downloaded as PDF");
   };
 
   const description = jobTitle
@@ -115,12 +132,22 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
               </Button>
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
-                onClick={handleDownload}
+                onClick={handleDownloadTxt}
+                disabled={loading || !letter.trim()}
+              >
+                <FileText className="mr-1.5 size-3.5" />
+                Download .txt
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleDownloadPdf}
                 disabled={loading || !letter.trim()}
               >
                 <Download className="mr-1.5 size-3.5" />
-                Download .txt
+                Download .pdf
               </Button>
             </div>
           </div>
@@ -145,9 +172,8 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
             disabled={loading}
           />
           <p className="text-xs text-muted-foreground">
-            Edit the text above before downloading. The file is saved as a
-            plain-text document so you can paste or attach it when applying
-            manually.
+            Edit the text above before downloading. Save it as plain text or as
+            a PDF, then paste or attach it when applying manually.
           </p>
         </div>
 

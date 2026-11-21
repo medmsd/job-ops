@@ -5,10 +5,15 @@ import { CoverLetterModal } from "./CoverLetterModal";
 
 const mocks = vi.hoisted(() => ({
   generate: vi.fn(),
+  buildPdf: vi.fn(),
 }));
 
 vi.mock("@client/api", () => ({
   generateJobCoverLetter: mocks.generate,
+}));
+
+vi.mock("@client/lib/cover-letter-pdf", () => ({
+  buildCoverLetterPdf: mocks.buildPdf,
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -46,6 +51,9 @@ describe("CoverLetterModal", () => {
     vi.clearAllMocks();
     clickedAnchor = null;
     mocks.generate.mockResolvedValue(result);
+    mocks.buildPdf.mockReturnValue(
+      new Blob(["%PDF-1.4"], { type: "application/pdf" }),
+    );
     Object.defineProperty(URL, "createObjectURL", {
       value: createObjectURL,
       configurable: true,
@@ -103,13 +111,36 @@ describe("CoverLetterModal", () => {
     fireEvent.change(screen.getByLabelText("Generated cover letter"), {
       target: { value: "Edited letter." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /download/i }));
+    fireEvent.click(screen.getByRole("button", { name: /download \.txt/i }));
 
     expect(createObjectURL).toHaveBeenCalledWith(
       expect.objectContaining({ type: "text/plain;charset=utf-8" }),
     );
     expect(clickedAnchor?.download).toBe(result.filename);
     expect(clickedAnchor?.href).toBe("blob:cover-letter");
+  });
+
+  it("downloads the edited letter as a PDF with a matching filename", async () => {
+    render(<CoverLetterModal open onOpenChange={vi.fn()} jobId="job-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Generated cover letter")).toHaveValue(
+        result.coverLetter,
+      );
+    });
+
+    fireEvent.change(screen.getByLabelText("Generated cover letter"), {
+      target: { value: "Edited letter." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /download \.pdf/i }));
+
+    expect(mocks.buildPdf).toHaveBeenCalledWith("Edited letter.");
+    expect(createObjectURL).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "application/pdf" }),
+    );
+    expect(clickedAnchor?.download).toBe(
+      "Mohamed Mseddi Cover Letter Acme.pdf",
+    );
   });
 
   it("regenerates when requested and shows failures", async () => {

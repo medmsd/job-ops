@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  coverLetterPdfFilename,
   tailoredCoverLetterFilename,
   tailoredResumeFilename,
 } from "./tailored-document-filenames";
@@ -15,6 +16,16 @@ describe("tailored document filenames", () => {
     expect(tailoredCoverLetterFilename("Dwareapps")).toBe(
       "Mohamed Mseddi Cover Letter Dwareapps.txt",
     );
+  });
+
+  it("derives the PDF cover letter filename from the text filename", () => {
+    expect(
+      coverLetterPdfFilename("Mohamed Mseddi Cover Letter Dwareapps.txt"),
+    ).toBe("Mohamed Mseddi Cover Letter Dwareapps.pdf");
+    expect(
+      coverLetterPdfFilename(tailoredCoverLetterFilename("Acme", "Jane Doe")),
+    ).toBe("Jane Doe Cover Letter Acme.pdf");
+    expect(coverLetterPdfFilename("cover-letter")).toBe("cover-letter.pdf");
   });
 
   it("removes unsafe path characters and falls back for missing companies", () => {

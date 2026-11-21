@@ -135,7 +135,7 @@ There is no auto-send, bulk send, or scheduled send in this version.
 If the job post has no recruiter email, you can still use the generated materials:
 
 - The **Download PDF** action saves the tailored CV as `Mohamed Mseddi Resume {CompanyName}.pdf` (for example, `Mohamed Mseddi Resume Dwareapps.pdf`). The same filename is used for the email attachment when applying through JobOps.
-- The **Cover letter** button (Apply tab) and **Generate cover letter** button (job page sidebar) generate a letter from the job description and tailored resume. Review or edit it in the dialog, then choose **Download .txt** to save `Mohamed Mseddi Cover Letter {CompanyName}.txt`. **Regenerate** creates a fresh draft.
+- The **Cover letter** button (Apply tab) and **Generate cover letter** button (job page sidebar) generate a letter from the job description and tailored resume. Review or edit it in the dialog, then choose **Download .txt** to save `Mohamed Mseddi Cover Letter {CompanyName}.txt` or **Download .pdf** to save `Mohamed Mseddi Cover Letter {CompanyName}.pdf`. Both use the edited text and the same company name as the tailored CV. **Regenerate** creates a fresh draft.
 
 No email is required or sent when generating or downloading these files.
 
