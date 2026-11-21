@@ -69,21 +69,39 @@ const openRouterImageCapabilityCache = new Map<
   { reason: string | null | undefined; expiresAt: number }
 >();
 
+/**
+ * Reasoning models such as qwen3 can emit their chain of thought inside the
+ * only string field of a structured response, even with `think: false`. Giving
+ * them a dedicated field keeps the private working notes out of the reply the
+ * user sees.
+ */
 const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
   name: "job_chat_response",
   schema: {
     type: "object",
     properties: {
+      thinking: {
+        type: "string",
+        description: "Private working notes. Never shown to the user.",
+      },
       response: {
         type: "string",
         description:
           "The direct user-facing reply in plain text or Markdown. Do not serialize JSON into this string unless the user explicitly asks for JSON.",
       },
     },
-    required: ["response"],
+    required: ["thinking", "response"],
     additionalProperties: false,
   },
 };
+
+const CHAT_RESPONSE_GUIDANCE = [
+  "Write your private analysis in the thinking field.",
+  "Put only the finished reply the user should read in the response field.",
+  "Never put analysis, self-talk, or phrases like 'let me check' in the response field.",
+  "When the user asks you to answer a question from a job application form, write the answer in first person as the candidate, ready to paste into the form.",
+  "If a required personal detail such as salary expectations is missing, say so briefly and provide a fill-in template instead of inventing a number.",
+].join(" ");
 
 function estimateTokenCount(value: string): number {
   if (!value) return 0;
@@ -775,12 +793,19 @@ async function runAssistantReply(
       allowCliProviders: llmConfig.allowCliProviders,
     });
 
-    const llmResult = await llm.callJson<{ response: string }>({
+    const llmResult = await llm.callJson<{
+      thinking?: string;
+      response: string;
+    }>({
       model: llmConfig.model,
       messages: [
         {
           role: "system",
           content: context.systemPrompt,
+        },
+        {
+          role: "system",
+          content: CHAT_RESPONSE_GUIDANCE,
         },
         {
           role: "system",

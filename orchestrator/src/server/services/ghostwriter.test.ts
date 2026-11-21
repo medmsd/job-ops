@@ -350,6 +350,55 @@ describe("ghostwriter service", () => {
     );
   });
 
+  it("keeps model reasoning out of the stored reply", async () => {
+    const answer =
+      "My salary expectation is €80,000 gross per year including 8% holiday allowance.";
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        thinking:
+          "Private note: I need to check whether the CV has salary data.",
+        response: answer,
+      },
+    });
+
+    const assistantPartial: JobChatMessage = {
+      ...baseAssistantMessage,
+      id: "assistant-thinking",
+      content: "",
+      status: "partial",
+    };
+    const assistantComplete: JobChatMessage = {
+      ...assistantPartial,
+      content: answer,
+      status: "complete",
+    };
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce(assistantPartial);
+    mocks.repo.updateMessage.mockResolvedValue(assistantComplete);
+    mocks.repo.getMessageById.mockResolvedValue(assistantComplete);
+
+    const result = await sendMessageForJob({
+      jobId: "job-1",
+      content: "What are my salary expectations?",
+    });
+
+    const llmArg = mocks.llmCallJson.mock.calls[0][0];
+    expect(llmArg.jsonSchema.schema.properties).toHaveProperty("thinking");
+    expect(llmArg.jsonSchema.schema.required).toEqual(["thinking", "response"]);
+    expect(llmArg.messages).toContainEqual({
+      role: "system",
+      content: expect.stringContaining("thinking field"),
+    });
+
+    expect(result.assistantMessage?.content).toBe(answer);
+    expect(mocks.repo.updateMessage).toHaveBeenCalledWith(
+      "assistant-thinking",
+      expect.objectContaining({ content: answer }),
+    );
+  });
+
   it("does not persist a user message when Ghostwriter quota is exhausted", async () => {
     mocks.hostedUsage.reserveHostedUsage.mockRejectedValueOnce(
       new Error("Monthly usage quota exceeded"),
