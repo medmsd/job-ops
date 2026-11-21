@@ -91,6 +91,19 @@ describe.sequential("Post-Application Review Workflow API", () => {
     expect(typeof body.meta.requestId).toBe("string");
   });
 
+  it("defaults the inbox provider to Microsoft Graph", async () => {
+    await seedPendingMessage();
+
+    const res = await fetch(
+      `${baseUrl}/api/post-application/inbox?accountKey=default`,
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.total).toBe(0);
+  });
+
   it("approves an inbox item and writes stage event", async () => {
     const { message, jobId } = await seedPendingMessage();
     const { db, schema } = await import("@server/db");

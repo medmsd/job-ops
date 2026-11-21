@@ -7,6 +7,7 @@ export {
   toProviderAppError,
 } from "./errors";
 export { gmailProvider } from "./gmail";
+export { graphProvider } from "./graph";
 export { imapProvider } from "./imap";
 export {
   listPostApplicationProviders,

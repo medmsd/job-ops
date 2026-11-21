@@ -308,6 +308,22 @@ export async function getMessageMetadata(
   };
 }
 
+/**
+ * Fetch metadata for the single most recent inbox message. No recruitment
+ * keyword filtering is applied so the diagnostic shows what the connection
+ * actually sees.
+ */
+export async function fetchLatestGmailMessage(
+  token: string,
+): Promise<GmailMetadataMessage | null> {
+  const list = await gmailApi<{ messages?: Array<{ id?: string }> }>(
+    token,
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&labelIds=INBOX",
+  );
+  const id = list.messages?.[0]?.id;
+  return id ? getMessageMetadata(token, id) : null;
+}
+
 export async function getMessageFull(
   token: string,
   messageId: string,

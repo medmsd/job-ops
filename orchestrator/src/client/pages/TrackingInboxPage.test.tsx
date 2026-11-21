@@ -208,6 +208,21 @@ describe("TrackingInboxPage", () => {
     });
   });
 
+  it("defaults the provider to Microsoft Graph", async () => {
+    render(
+      <MemoryRouter>
+        <TrackingInboxPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(api.postApplicationProviderStatus).toHaveBeenCalledWith({
+        provider: "graph",
+        accountKey: "default",
+      });
+    });
+  });
+
   it("submits approve action", async () => {
     render(
       <MemoryRouter>

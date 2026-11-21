@@ -226,7 +226,7 @@ describe("provider adapters", () => {
           apiKey: null,
           model: "local",
         },
-        expectedUrl: "http://localhost:11434/v1/chat/completions",
+        expectedUrl: "http://localhost:11434/api/chat",
       },
     ];
 
@@ -267,7 +267,42 @@ describe("provider adapters", () => {
     expect(requestyStrategy.extractText(response)).toBe("ok");
     expect(glmStrategy.extractText(response)).toBe("ok");
     expect(lmStudioStrategy.extractText(response)).toBe("ok");
-    expect(ollamaStrategy.extractText(response)).toBe("ok");
+  });
+
+  it("extracts text from Ollama's native chat response", () => {
+    expect(ollamaStrategy.extractText({ message: { content: "ok" } })).toBe(
+      "ok",
+    );
+    expect(
+      ollamaStrategy.extractText({ choices: [{ message: { content: "no" } }] }),
+    ).toBeNull();
+  });
+
+  it("uses native Ollama structured output and disables thinking for qwen3", () => {
+    const request = ollamaStrategy.buildRequest({
+      mode: "json_schema",
+      baseUrl: "http://localhost:11434",
+      apiKey: null,
+      model: "qwen3:4b",
+      messages,
+      jsonSchema: schema,
+    });
+    const body = request.body as Record<string, unknown>;
+    expect(body.think).toBe(false);
+    expect(body.format).toEqual(schema.schema);
+    expect(request.url).toBe("http://localhost:11434/api/chat");
+
+    const plainRequest = ollamaStrategy.buildRequest({
+      mode: "none",
+      baseUrl: "http://localhost:11434",
+      apiKey: null,
+      model: "llama3:latest",
+      messages,
+      jsonSchema: schema,
+    });
+    expect(
+      (plainRequest.body as Record<string, unknown>).think,
+    ).toBeUndefined();
   });
 
   it("sends optional bearer auth for Ollama chat requests", () => {

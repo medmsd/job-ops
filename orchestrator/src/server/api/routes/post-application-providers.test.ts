@@ -14,6 +14,10 @@ describe.sequential("Post-Application Provider actions API", () => {
   const originalClientId = process.env.GMAIL_OAUTH_CLIENT_ID;
   const originalClientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET;
   const originalRedirectUri = process.env.GMAIL_OAUTH_REDIRECT_URI;
+  const originalGraphClientId = process.env.GRAPH_OAUTH_CLIENT_ID;
+  const originalGraphClientSecret = process.env.GRAPH_OAUTH_CLIENT_SECRET;
+  const originalGraphTenantId = process.env.GRAPH_OAUTH_TENANT_ID;
+  const originalGraphRedirectUri = process.env.GRAPH_OAUTH_REDIRECT_URI;
   const originalOauthStateMaxEntries =
     process.env.POST_APPLICATION_OAUTH_STATE_MAX_ENTRIES;
   const originalOauthStateTtlMs =
@@ -27,6 +31,10 @@ describe.sequential("Post-Application Provider actions API", () => {
     process.env.GMAIL_OAUTH_CLIENT_ID = originalClientId;
     process.env.GMAIL_OAUTH_CLIENT_SECRET = originalClientSecret;
     process.env.GMAIL_OAUTH_REDIRECT_URI = originalRedirectUri;
+    process.env.GRAPH_OAUTH_CLIENT_ID = originalGraphClientId;
+    process.env.GRAPH_OAUTH_CLIENT_SECRET = originalGraphClientSecret;
+    process.env.GRAPH_OAUTH_TENANT_ID = originalGraphTenantId;
+    process.env.GRAPH_OAUTH_REDIRECT_URI = originalGraphRedirectUri;
     process.env.POST_APPLICATION_OAUTH_STATE_MAX_ENTRIES =
       originalOauthStateMaxEntries;
     process.env.POST_APPLICATION_OAUTH_STATE_TTL_MS = originalOauthStateTtlMs;
@@ -328,5 +336,55 @@ describe.sequential("Post-Application Provider actions API", () => {
     expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
     expect(body.error.message).toContain("Gmail OAuth is not configured");
     expect(typeof body.meta.requestId).toBe("string");
+  });
+
+  it("starts graph oauth flow with PKCE", async () => {
+    process.env.GRAPH_OAUTH_CLIENT_ID = "graph-client-id";
+    process.env.GRAPH_OAUTH_CLIENT_SECRET = "graph-client-secret";
+    process.env.GRAPH_OAUTH_TENANT_ID = "common";
+    process.env.GRAPH_OAUTH_REDIRECT_URI = `${baseUrl}/oauth/graph/callback`;
+
+    const res = await fetch(
+      `${baseUrl}/api/post-application/providers/graph/oauth/start?accountKey=outlook`,
+      {
+        headers: { "x-request-id": "req-graph-oauth-start" },
+      },
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-request-id")).toBe("req-graph-oauth-start");
+    expect(body.ok).toBe(true);
+    expect(body.data.provider).toBe("graph");
+    expect(body.data.accountKey).toBe("outlook");
+    const authorizationUrl = new URL(body.data.authorizationUrl);
+    expect(authorizationUrl.origin + authorizationUrl.pathname).toBe(
+      "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    );
+    expect(authorizationUrl.searchParams.get("code_challenge_method")).toBe(
+      "S256",
+    );
+    expect(authorizationUrl.searchParams.get("state")).toBe(body.data.state);
+    expect(authorizationUrl.searchParams.get("scope")).toContain("Mail.Read");
+    expect(authorizationUrl.searchParams.get("scope")).toContain(
+      "offline_access",
+    );
+  });
+
+  it("returns 503 when graph oauth config is missing", async () => {
+    delete process.env.GRAPH_OAUTH_CLIENT_ID;
+    delete process.env.GRAPH_OAUTH_CLIENT_SECRET;
+
+    const res = await fetch(
+      `${baseUrl}/api/post-application/providers/graph/oauth/start`,
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(body.error.message).toContain(
+      "Microsoft Graph OAuth is not configured",
+    );
   });
 });

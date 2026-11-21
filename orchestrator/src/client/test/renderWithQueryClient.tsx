@@ -1,3 +1,4 @@
+import { JobPdfViewerProvider } from "@client/components/pdf/JobPdfViewerProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type RenderOptions, render, renderHook } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
@@ -23,7 +24,9 @@ export function renderWithQueryClient(
   const queryClient = createTestQueryClient();
 
   const Wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <JobPdfViewerProvider>{children}</JobPdfViewerProvider>
+    </QueryClientProvider>
   );
 
   return {
@@ -35,7 +38,9 @@ export function renderWithQueryClient(
 export function renderHookWithQueryClient<TResult>(callback: () => TResult) {
   const queryClient = createTestQueryClient();
   const Wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <JobPdfViewerProvider>{children}</JobPdfViewerProvider>
+    </QueryClientProvider>
   );
   const rendered = renderHook(callback, { wrapper: Wrapper });
   return {

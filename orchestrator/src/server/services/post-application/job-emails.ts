@@ -14,10 +14,19 @@ export const DEFAULT_JOB_EMAIL_LIMIT = 100;
 export const MAX_JOB_EMAIL_LIMIT = 200;
 
 function buildMessageSourceUrl(message: PostApplicationMessage): string | null {
-  if (message.provider !== "gmail" || !message.externalThreadId) return null;
-  return `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(
-    message.externalThreadId,
-  )}`;
+  if (message.provider === "gmail") {
+    if (!message.externalThreadId) return null;
+    return `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(
+      message.externalThreadId,
+    )}`;
+  }
+  if (message.provider === "graph") {
+    if (!message.externalMessageId) return null;
+    return `https://outlook.office.com/mail/id/${encodeURIComponent(
+      message.externalMessageId,
+    )}`;
+  }
+  return null;
 }
 
 export async function listJobPostApplicationEmails(

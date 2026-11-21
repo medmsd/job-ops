@@ -3,10 +3,12 @@ import { useProfile } from "@client/hooks/useProfile";
 import { useSettings } from "@client/hooks/useSettings";
 import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
+import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import type { Job } from "@shared/types.js";
 import {
   Check,
   CircleAlert,
+  Eye,
   FileText,
   Loader2,
   RefreshCcw,
@@ -15,6 +17,7 @@ import type React from "react";
 import type { ComponentProps } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useJobPdfViewer } from "@/client/components/pdf/JobPdfViewerProvider";
 import { Tip } from "@/client/components/Tip";
 import { formatUserFacingError } from "@/client/lib/error-format";
 import { showErrorToast } from "@/client/lib/error-toast";
@@ -125,6 +128,7 @@ const toSavePayloadFromJob = (job: Job): TailoringSavePayload => ({
 export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   props,
 ) => {
+  const { openJobPdf } = useJobPdfViewer();
   const {
     catalog,
     isCatalogLoading,
@@ -487,6 +491,22 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     }
   }, [props.onBeforeGenerate, props.onUpdate, flushAutosave, props.job.id]);
 
+  const handlePreviewPdf = useCallback(() => {
+    if (!props.job.pdfPath || isGeneratingPdf) return;
+    openJobPdf(
+      props.job.id,
+      props.job.title,
+      tailoredResumeFilename(props.job.employer),
+    );
+  }, [
+    openJobPdf,
+    props.job.id,
+    props.job.employer,
+    props.job.pdfPath,
+    props.job.title,
+    isGeneratingPdf,
+  ]);
+
   const handleUndoSummary = useCallback(() => {
     setSummary(originalValues.summary);
   }, [originalValues.summary, setSummary]);
@@ -681,6 +701,17 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
             )}
             Generate PDF
           </Button>
+          {props.job.pdfPath && (
+            <Button
+              onClick={handlePreviewPdf}
+              disabled={Boolean(generateTarget) || isGeneratingPdf}
+              variant="outline"
+              size="sm"
+            >
+              <Eye className="h-4 w-4" />
+              Preview PDF
+            </Button>
+          )}
         </div>
       </div>
 

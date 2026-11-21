@@ -60,6 +60,7 @@ function renderRightSidebar(overrides: Parameters<typeof createJob>[0] = {}) {
       onEditTailoring={noop}
       onViewPdf={noop}
       onDownloadPdf={noop}
+      onGenerateCoverLetter={noop}
       onUploadPdf={noop}
       onRegeneratePdf={noop}
       onSkip={noop}
@@ -96,6 +97,9 @@ describe("JobPageRightSidebar actions", () => {
     ).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: /download old pdf/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /generate cover letter/i }),
     ).toBeInTheDocument();
   });
 

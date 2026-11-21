@@ -2,6 +2,7 @@ import type { PostApplicationProvider } from "@shared/types";
 import { POST_APPLICATION_PROVIDERS } from "@shared/types";
 import { providerInvalidRequest } from "./errors";
 import { gmailProvider } from "./gmail";
+import { graphProvider } from "./graph";
 import { imapProvider } from "./imap";
 import type { PostApplicationProviderAdapter } from "./types";
 
@@ -11,6 +12,7 @@ const providerRegistry: Record<
 > = {
   gmail: gmailProvider,
   imap: imapProvider,
+  graph: graphProvider,
 };
 
 function isPostApplicationProvider(

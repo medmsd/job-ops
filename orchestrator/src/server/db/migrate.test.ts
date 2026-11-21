@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, describe, it } from "vitest";
 
 describe.sequential("database migrations", () => {
@@ -57,6 +58,174 @@ describe.sequential("database migrations", () => {
         stdio: "pipe",
       },
     );
+  });
+
+  it("migrates legacy post-application CHECK constraints to allow graph", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "job-ops-migrate-"));
+    const dbPath = join(tempDir, "jobs.db");
+    const seed = new Database(dbPath);
+    seed.exec(`
+      CREATE TABLE tenants (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        display_name TEXT,
+        password_hash TEXT,
+        password_salt TEXT,
+        is_system_admin INTEGER NOT NULL DEFAULT 0,
+        is_disabled INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE post_application_integrations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+        user_id TEXT,
+        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+        account_key TEXT NOT NULL DEFAULT 'default',
+        display_name TEXT,
+        status TEXT NOT NULL DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connected', 'error')),
+        credentials TEXT,
+        last_connected_at INTEGER,
+        last_synced_at INTEGER,
+        last_error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(tenant_id, user_id, provider, account_key)
+      );
+      CREATE TABLE post_application_messages (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+        user_id TEXT,
+        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+        account_key TEXT NOT NULL DEFAULT 'default',
+        integration_id TEXT,
+        sync_run_id TEXT,
+        external_message_id TEXT NOT NULL,
+        external_thread_id TEXT,
+        from_address TEXT NOT NULL DEFAULT '',
+        from_domain TEXT,
+        sender_name TEXT,
+        subject TEXT NOT NULL DEFAULT '',
+        received_at INTEGER NOT NULL,
+        snippet TEXT NOT NULL DEFAULT '',
+        classification_label TEXT,
+        classification_confidence REAL,
+        classification_payload TEXT,
+        relevance_llm_score REAL,
+        relevance_decision TEXT NOT NULL DEFAULT 'needs_llm',
+        match_confidence INTEGER,
+        message_type TEXT NOT NULL DEFAULT 'other',
+        stage_event_payload TEXT,
+        processing_status TEXT NOT NULL DEFAULT 'pending_user',
+        matched_job_id TEXT,
+        decided_at INTEGER,
+        decided_by TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(tenant_id, user_id, provider, account_key, external_message_id)
+      );
+      CREATE TABLE post_application_sync_runs (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+        user_id TEXT,
+        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+        account_key TEXT NOT NULL DEFAULT 'default',
+        integration_id TEXT,
+        status TEXT NOT NULL DEFAULT 'running',
+        started_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        messages_discovered INTEGER NOT NULL DEFAULT 0,
+        messages_relevant INTEGER NOT NULL DEFAULT 0,
+        messages_classified INTEGER NOT NULL DEFAULT 0,
+        messages_matched INTEGER NOT NULL DEFAULT 0,
+        messages_approved INTEGER NOT NULL DEFAULT 0,
+        messages_denied INTEGER NOT NULL DEFAULT 0,
+        messages_errored INTEGER NOT NULL DEFAULT 0,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE tracer_links (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+        user_id TEXT,
+        token TEXT NOT NULL UNIQUE,
+        job_id TEXT NOT NULL,
+        source_path TEXT NOT NULL,
+        source_label TEXT NOT NULL,
+        destination_url TEXT NOT NULL,
+        destination_url_hash TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(tenant_id, user_id, job_id, source_path, destination_url_hash)
+      );
+    `);
+    seed.close();
+
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `import { join } from "node:path";
+         import { pathToFileURL } from "node:url";
+         await import(pathToFileURL(join(process.cwd(), "src/server/db/migrate.ts")).href);`,
+      ],
+      {
+        env: {
+          ...process.env,
+          DATA_DIR: tempDir,
+        },
+        stdio: "pipe",
+      },
+    );
+
+    const migratedDb = new Database(dbPath);
+    for (const tableName of [
+      "post_application_integrations",
+      "post_application_messages",
+      "post_application_sync_runs",
+    ]) {
+      const row = migratedDb
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(tableName) as { sql: string } | undefined;
+      if (!row?.sql.includes("'graph'")) {
+        throw new Error(
+          `${tableName} did not gain the graph provider after migration`,
+        );
+      }
+    }
+
+    migratedDb.exec(
+      `INSERT INTO post_application_integrations (id, tenant_id, provider, account_key)
+       VALUES ('graph-test', 'tenant_default', 'graph', 'default')`,
+    );
+
+    const sentEmailsTable = migratedDb
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'post_application_sent_emails'",
+      )
+      .get() as { sql: string } | undefined;
+    expect(sentEmailsTable?.sql).toContain("job_id");
+    expect(sentEmailsTable?.sql).toContain("tenant_id");
+    expect(sentEmailsTable?.sql).toContain("CHECK(status IN ('sent', 'failed'))");
+
+    migratedDb.close();
   });
 
   it("creates tenant foreign keys for tenant-scoped core tables", async () => {

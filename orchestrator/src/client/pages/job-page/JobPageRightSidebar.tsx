@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileText,
   MoreHorizontal,
+  PenLine,
   PlusCircle,
   RefreshCcw,
   Sparkles,
@@ -48,6 +49,7 @@ type JobPageRightSidebarProps = {
   onEditTailoring: () => void;
   onViewPdf: () => void;
   onDownloadPdf: () => void;
+  onGenerateCoverLetter?: () => void;
   onUploadPdf: () => void;
   onRegeneratePdf: () => void;
   onSkip: () => void;
@@ -79,6 +81,7 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
   onEditTailoring,
   onViewPdf,
   onDownloadPdf,
+  onGenerateCoverLetter,
   onUploadPdf,
   onRegeneratePdf,
   onSkip,
@@ -177,6 +180,18 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
             </Button>
           </TooltipWhenDisabled>
         )}
+
+        {onGenerateCoverLetter ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 w-full justify-start"
+            onClick={onGenerateCoverLetter}
+          >
+            <PenLine className="mr-1.5 h-3.5 w-3.5" />
+            Generate cover letter
+          </Button>
+        ) : null}
 
         <Button
           size="sm"

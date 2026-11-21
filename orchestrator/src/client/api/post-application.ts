@@ -1,12 +1,14 @@
-import type {
-  ApplicationStage,
-  PostApplicationAction,
-  PostApplicationActionResponse,
-  PostApplicationInboxItem,
-  PostApplicationProvider,
-  PostApplicationProviderActionResponse,
-  PostApplicationRouterStageTarget,
-  PostApplicationSyncRun,
+import {
+  type ApplicationStage,
+  DEFAULT_POST_APPLICATION_PROVIDER,
+  type PostApplicationAction,
+  type PostApplicationActionResponse,
+  type PostApplicationInboxItem,
+  type PostApplicationLastMessageResponse,
+  type PostApplicationProvider,
+  type PostApplicationProviderActionResponse,
+  type PostApplicationRouterStageTarget,
+  type PostApplicationSyncRun,
 } from "@shared/types";
 import { fetchApi, withQuery } from "./core";
 
@@ -15,7 +17,7 @@ export async function postApplicationProviderConnect(input: {
   accountKey?: string;
   payload?: Record<string, unknown>;
 }): Promise<PostApplicationProviderActionResponse> {
-  const provider = input.provider ?? "gmail";
+  const provider = input.provider ?? DEFAULT_POST_APPLICATION_PROVIDER;
   return fetchApi<PostApplicationProviderActionResponse>(
     `/post-application/providers/${provider}/actions/connect`,
     {
@@ -66,11 +68,49 @@ export async function postApplicationGmailOauthExchange(input: {
   );
 }
 
+export async function postApplicationGraphOauthStart(input?: {
+  accountKey?: string;
+}): Promise<{
+  provider: "graph";
+  accountKey: string;
+  authorizationUrl: string;
+  state: string;
+}> {
+  return fetchApi<{
+    provider: "graph";
+    accountKey: string;
+    authorizationUrl: string;
+    state: string;
+  }>(
+    withQuery("/post-application/providers/graph/oauth/start", {
+      accountKey: input?.accountKey,
+    }),
+  );
+}
+
+export async function postApplicationGraphOauthExchange(input: {
+  accountKey?: string;
+  state: string;
+  code: string;
+}): Promise<PostApplicationProviderActionResponse> {
+  return fetchApi<PostApplicationProviderActionResponse>(
+    "/post-application/providers/graph/oauth/exchange",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(input.accountKey ? { accountKey: input.accountKey } : {}),
+        state: input.state,
+        code: input.code,
+      }),
+    },
+  );
+}
+
 export async function postApplicationProviderStatus(input?: {
   provider?: PostApplicationProvider;
   accountKey?: string;
 }): Promise<PostApplicationProviderActionResponse> {
-  const provider = input?.provider ?? "gmail";
+  const provider = input?.provider ?? DEFAULT_POST_APPLICATION_PROVIDER;
   return fetchApi<PostApplicationProviderActionResponse>(
     `/post-application/providers/${provider}/actions/status`,
     {
@@ -88,7 +128,7 @@ export async function postApplicationProviderSync(input?: {
   maxMessages?: number;
   searchDays?: number;
 }): Promise<PostApplicationProviderActionResponse> {
-  const provider = input?.provider ?? "gmail";
+  const provider = input?.provider ?? DEFAULT_POST_APPLICATION_PROVIDER;
   return fetchApi<PostApplicationProviderActionResponse>(
     `/post-application/providers/${provider}/actions/sync`,
     {
@@ -106,11 +146,27 @@ export async function postApplicationProviderSync(input?: {
   );
 }
 
+export async function postApplicationProviderLastMessage(input?: {
+  provider?: PostApplicationProvider;
+  accountKey?: string;
+}): Promise<PostApplicationLastMessageResponse> {
+  const provider = input?.provider ?? DEFAULT_POST_APPLICATION_PROVIDER;
+  return fetchApi<PostApplicationLastMessageResponse>(
+    `/post-application/providers/${provider}/last-message`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(input?.accountKey ? { accountKey: input.accountKey } : {}),
+      }),
+    },
+  );
+}
+
 export async function postApplicationProviderDisconnect(input?: {
   provider?: PostApplicationProvider;
   accountKey?: string;
 }): Promise<PostApplicationProviderActionResponse> {
-  const provider = input?.provider ?? "gmail";
+  const provider = input?.provider ?? DEFAULT_POST_APPLICATION_PROVIDER;
   return fetchApi<PostApplicationProviderActionResponse>(
     `/post-application/providers/${provider}/actions/disconnect`,
     {
@@ -129,7 +185,7 @@ export async function getPostApplicationInbox(input?: {
 }): Promise<{ items: PostApplicationInboxItem[]; total: number }> {
   return fetchApi<{ items: PostApplicationInboxItem[]; total: number }>(
     withQuery("/post-application/inbox", {
-      provider: input?.provider ?? "gmail",
+      provider: input?.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
       accountKey: input?.accountKey ?? "default",
       limit: input?.limit,
     }),
@@ -155,7 +211,7 @@ export async function approvePostApplicationInboxItem(input: {
   }>(`/post-application/inbox/${encodeURIComponent(input.messageId)}/approve`, {
     method: "POST",
     body: JSON.stringify({
-      provider: input.provider ?? "gmail",
+      provider: input.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
       accountKey: input.accountKey ?? "default",
       ...(input.jobId ? { jobId: input.jobId } : {}),
       ...(input.stageTarget ? { stageTarget: input.stageTarget } : {}),
@@ -179,7 +235,7 @@ export async function denyPostApplicationInboxItem(input: {
     {
       method: "POST",
       body: JSON.stringify({
-        provider: input.provider ?? "gmail",
+        provider: input.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
         accountKey: input.accountKey ?? "default",
         ...(input.decidedBy ? { decidedBy: input.decidedBy } : {}),
       }),
@@ -199,7 +255,7 @@ export async function runPostApplicationInboxAction(input: {
       method: "POST",
       body: JSON.stringify({
         action: input.action,
-        provider: input.provider ?? "gmail",
+        provider: input.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
         accountKey: input.accountKey ?? "default",
         ...(input.decidedBy ? { decidedBy: input.decidedBy } : {}),
       }),
@@ -214,7 +270,7 @@ export async function getPostApplicationRuns(input?: {
 }): Promise<{ runs: PostApplicationSyncRun[]; total: number }> {
   return fetchApi<{ runs: PostApplicationSyncRun[]; total: number }>(
     withQuery("/post-application/runs", {
-      provider: input?.provider ?? "gmail",
+      provider: input?.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
       accountKey: input?.accountKey ?? "default",
       limit: input?.limit,
     }),
@@ -239,7 +295,7 @@ export async function getPostApplicationRunMessages(input: {
     withQuery(
       `/post-application/runs/${encodeURIComponent(input.runId)}/messages`,
       {
-        provider: input.provider ?? "gmail",
+        provider: input.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
         accountKey: input.accountKey ?? "default",
         limit: input.limit,
       },

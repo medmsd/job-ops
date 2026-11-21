@@ -17,6 +17,7 @@ import {
   POST_APPLICATION_PROCESSING_STATUSES,
   POST_APPLICATION_PROVIDERS,
   POST_APPLICATION_RELEVANCE_DECISIONS,
+  POST_APPLICATION_SENT_EMAIL_STATUSES,
   POST_APPLICATION_SYNC_RUN_STATUSES,
   SSO_PROVIDERS,
 } from "@shared/types";
@@ -1027,6 +1028,47 @@ export const postApplicationMessages = sqliteTable(
   }),
 );
 
+export const postApplicationSentEmails = sqliteTable(
+  "post_application_sent_emails",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .default("tenant_default")
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    integrationId: text("integration_id").references(
+      () => postApplicationIntegrations.id,
+      { onDelete: "set null" },
+    ),
+    provider: text("provider", { enum: POST_APPLICATION_PROVIDERS }).notNull(),
+    toAddress: text("to_address").notNull(),
+    subject: text("subject").notNull(),
+    messageId: text("message_id"),
+    status: text("status", { enum: POST_APPLICATION_SENT_EMAIL_STATUSES })
+      .notNull()
+      .default("sent"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    sentAt: integer("sent_at", { mode: "number" }),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    jobIndex: index("idx_post_app_sent_emails_job_id").on(table.jobId),
+    tenantUserJobIndex: index("idx_post_app_sent_emails_tenant_user_job").on(
+      table.tenantId,
+      table.userId,
+      table.jobId,
+    ),
+  }),
+);
+
 export const tracerLinks = sqliteTable(
   "tracer_links",
   {
@@ -1172,6 +1214,10 @@ export type PostApplicationMessageRow =
   typeof postApplicationMessages.$inferSelect;
 export type NewPostApplicationMessageRow =
   typeof postApplicationMessages.$inferInsert;
+export type PostApplicationSentEmailRow =
+  typeof postApplicationSentEmails.$inferSelect;
+export type NewPostApplicationSentEmailRow =
+  typeof postApplicationSentEmails.$inferInsert;
 export type TracerLinkRow = typeof tracerLinks.$inferSelect;
 export type NewTracerLinkRow = typeof tracerLinks.$inferInsert;
 export type TracerClickEventRow = typeof tracerClickEvents.$inferSelect;

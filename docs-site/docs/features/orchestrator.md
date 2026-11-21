@@ -180,6 +180,17 @@ Common paths:
 
 - Discovered to finalization: `POST /api/jobs/actions` with `{ "action": "move_to_ready", "jobIds": ["<jobId>"] }`
 - Ready regeneration: `POST /api/jobs/:id/generate-pdf`
+- In the UI: open a job's **Tailoring** tab, choose **Generate PDF**, then **Preview PDF** to open the generated file in a popup dialog on the current page. **Preview PDF** appears once the job has a generated PDF.
+
+### Applying with the tailored CV
+
+1. Open a ready job and select the **Apply** tab.
+2. Click **Apply now** to open the review-and-send dialog. The same dialog is available as **Email recruiter** in the **More actions** menu.
+3. Review the generated **Cover letter**. Editing it updates the **Message** below automatically; the message is sent as plain text with a short sign-off.
+4. Use **Preview PDF** in the dialog to inspect the tailored CV in a popup without leaving the current page.
+5. Check the confirmation box and click **Send email**.
+
+Nothing is sent until you confirm. Sending requires a matched tracked recruitment email, a generated tailored PDF, and Microsoft Graph with delegated `Mail.Send` consent. See [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
 
 ### Regenerating PDFs after edits (copy-pasteable examples)
 

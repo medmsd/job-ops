@@ -693,7 +693,7 @@ const migrations = [
   `CREATE TABLE IF NOT EXISTS post_application_integrations (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
-    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
     account_key TEXT NOT NULL DEFAULT 'default',
     display_name TEXT,
     status TEXT NOT NULL DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connected', 'error')),
@@ -710,7 +710,7 @@ const migrations = [
   `CREATE TABLE IF NOT EXISTS post_application_sync_runs (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
-    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
     account_key TEXT NOT NULL DEFAULT 'default',
     integration_id TEXT,
     status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
@@ -734,7 +734,7 @@ const migrations = [
   `CREATE TABLE IF NOT EXISTS post_application_messages (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
-    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
     account_key TEXT NOT NULL DEFAULT 'default',
     integration_id TEXT,
     sync_run_id TEXT,
@@ -768,6 +768,30 @@ const migrations = [
     FOREIGN KEY (matched_job_id) REFERENCES jobs(id) ON DELETE SET NULL,
     UNIQUE(tenant_id, provider, account_key, external_message_id)
   )`,
+
+  `CREATE TABLE IF NOT EXISTS post_application_sent_emails (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+    user_id TEXT,
+    job_id TEXT NOT NULL,
+    integration_id TEXT,
+    provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
+    to_address TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    message_id TEXT,
+    status TEXT NOT NULL DEFAULT 'sent' CHECK(status IN ('sent', 'failed')),
+    error_code TEXT,
+    error_message TEXT,
+    sent_at INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+    FOREIGN KEY (integration_id) REFERENCES post_application_integrations(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS idx_post_app_sent_emails_job_id
+    ON post_application_sent_emails(job_id)`,
 
   `CREATE TABLE IF NOT EXISTS tracer_links (
     id TEXT PRIMARY KEY,
@@ -1337,6 +1361,7 @@ function ensureTenantColumns(): void {
     "post_application_integrations",
     "post_application_sync_runs",
     "post_application_messages",
+    "post_application_sent_emails",
     "tracer_links",
     "tracer_click_events",
     "auth_sessions",
@@ -1370,6 +1395,7 @@ function ensurePrivateUserColumns(): void {
     "post_application_integrations",
     "post_application_sync_runs",
     "post_application_messages",
+    "post_application_sent_emails",
     "tracer_links",
     "tracer_click_events",
   ]) {
@@ -1402,7 +1428,11 @@ function ensurePrivateUserColumns(): void {
     backfillUserFromTenantOwner(tableName);
   }
 
-  for (const tableName of ["job_documents", "tracer_links"]) {
+  for (const tableName of [
+    "job_documents",
+    "post_application_sent_emails",
+    "tracer_links",
+  ]) {
     backfillUserFromParent({
       tableName,
       parentTableName: "jobs",
@@ -1592,7 +1622,7 @@ function rebuildPostApplicationPrivateTables(): void {
         id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
         user_id TEXT,
-        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
         account_key TEXT NOT NULL DEFAULT 'default',
         display_name TEXT,
         status TEXT NOT NULL DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connected', 'error')),
@@ -1623,7 +1653,7 @@ function rebuildPostApplicationPrivateTables(): void {
         id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
         user_id TEXT,
-        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap')),
+        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
         account_key TEXT NOT NULL DEFAULT 'default',
         integration_id TEXT,
         sync_run_id TEXT,
@@ -1833,6 +1863,72 @@ function seedLegacyOnboardingMigration(): void {
     .run(migrationId);
 }
 
+function ensurePostApplicationSyncRunsGraphProvider(): void {
+  if (!tableExists("post_application_sync_runs")) return;
+
+  const table = sqlite
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'post_application_sync_runs'",
+    )
+    .get() as { sql?: string } | undefined;
+  if (!table?.sql || table.sql.includes("'graph'")) return;
+
+  const columns = sqlite
+    .prepare("PRAGMA table_info(post_application_sync_runs)")
+    .all() as Array<{ name: string }>;
+  const hasUserId = columns.some((column) => column.name === "user_id");
+
+  sqlite.exec("PRAGMA foreign_keys = OFF");
+  try {
+    sqlite.exec(`
+      DROP TABLE IF EXISTS post_application_sync_runs_new;
+      CREATE TABLE post_application_sync_runs_new (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL DEFAULT 'tenant_default',
+        ${hasUserId ? "user_id TEXT," : ""}
+        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'imap', 'graph')),
+        account_key TEXT NOT NULL DEFAULT 'default',
+        integration_id TEXT,
+        status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
+        started_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        messages_discovered INTEGER NOT NULL DEFAULT 0,
+        messages_relevant INTEGER NOT NULL DEFAULT 0,
+        messages_classified INTEGER NOT NULL DEFAULT 0,
+        messages_matched INTEGER NOT NULL DEFAULT 0,
+        messages_approved INTEGER NOT NULL DEFAULT 0,
+        messages_denied INTEGER NOT NULL DEFAULT 0,
+        messages_errored INTEGER NOT NULL DEFAULT 0,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+        ${hasUserId ? "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE," : ""}
+        FOREIGN KEY (integration_id) REFERENCES post_application_integrations(id) ON DELETE SET NULL
+      );
+      INSERT INTO post_application_sync_runs_new (
+        id, tenant_id, ${hasUserId ? "user_id, " : ""}provider, account_key, integration_id,
+        status, started_at, completed_at, messages_discovered, messages_relevant,
+        messages_classified, messages_matched, messages_approved, messages_denied,
+        messages_errored, error_code, error_message, created_at, updated_at
+      )
+      SELECT
+        id, tenant_id, ${hasUserId ? "user_id, " : ""}provider, account_key, integration_id,
+        status, started_at, completed_at, messages_discovered, messages_relevant,
+        messages_classified, messages_matched, messages_approved, messages_denied,
+        messages_errored, error_code, error_message, created_at, updated_at
+      FROM post_application_sync_runs;
+      DROP TABLE post_application_sync_runs;
+      ALTER TABLE post_application_sync_runs_new RENAME TO post_application_sync_runs;
+      CREATE INDEX IF NOT EXISTS idx_post_app_sync_runs_provider_account_started_at
+        ON post_application_sync_runs(provider, account_key, started_at);
+    `);
+  } finally {
+    sqlite.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 console.log("🔐 Applying tenancy compatibility migrations...");
 rebuildAccountSubscriptionsKey();
 ensureTenantColumns();
@@ -1840,6 +1936,7 @@ ensureNullableUserPasswordColumns();
 seedLegacyOwnerFromBasicAuth();
 ensurePrivateUserColumns();
 rebuildPostApplicationPrivateTables();
+ensurePostApplicationSyncRunsGraphProvider();
 rebuildSettingsTable();
 seedLegacyOnboardingMigration();
 ensureTracerLinksUniqueIndex();

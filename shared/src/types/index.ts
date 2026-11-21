@@ -8,6 +8,7 @@ export * from "./extractors";
 export * from "./jobs";
 export * from "./pipeline";
 export * from "./post-application";
+export * from "./recruiter-email";
 export * from "./settings";
 export * from "./usage";
 export * from "./visa-sponsors";

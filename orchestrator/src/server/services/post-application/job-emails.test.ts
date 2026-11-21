@@ -131,6 +131,35 @@ describe.sequential("post-application job emails service", () => {
     expect(limited.items[0]).not.toHaveProperty("credentials");
   });
 
+  it("builds an Outlook source URL for Microsoft Graph messages", async () => {
+    await upsertConnectedPostApplicationIntegration({
+      provider: "graph",
+      accountKey: "default",
+      displayName: "Outlook",
+      credentials: { refreshToken: "secret-refresh-token" },
+    });
+    const job = await createJob({
+      source: "manual",
+      title: "Backend Engineer",
+      employer: "Contoso",
+      jobUrl: `https://example.com/jobs/${randomUUID()}`,
+    });
+
+    const graphMessage = await seedMessage({
+      jobId: job.id,
+      receivedAt: 1_704_153_600_000,
+      provider: "graph",
+    });
+
+    const result = await listJobPostApplicationEmails(job.id, 100);
+
+    expect(result.items[0]?.sourceUrl).toBe(
+      `https://outlook.office.com/mail/id/${encodeURIComponent(
+        graphMessage.externalMessageId,
+      )}`,
+    );
+  });
+
   it("returns 404 for a missing job before listing emails", async () => {
     await expect(
       listJobPostApplicationEmails("missing-job-id", 100),

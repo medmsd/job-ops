@@ -5,6 +5,7 @@ import type {
   JobActionRequest,
   JobActionResponse,
   JobActionStreamEvent,
+  JobCoverLetterResult,
   JobDocument,
   JobListItem,
   JobNote,
@@ -13,6 +14,9 @@ import type {
   JobsRevisionResponse,
   JobTracerLinksResponse,
   PostApplicationJobEmailsResponse,
+  RecruiterEmailPreview,
+  RecruiterEmailSendRequest,
+  RecruiterEmailSendResult,
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
@@ -161,6 +165,41 @@ export async function getJobEmails(
       t: Date.now(),
       limit: options?.limit,
     }),
+  );
+}
+
+export async function previewJobRecruiterEmail(
+  jobId: string,
+  input: { messageId?: string | null } = {},
+): Promise<RecruiterEmailPreview> {
+  return fetchApi<RecruiterEmailPreview>(
+    `/jobs/${encodeURIComponent(jobId)}/email/preview`,
+    {
+      method: "POST",
+      body: JSON.stringify({ messageId: input.messageId ?? null }),
+    },
+  );
+}
+
+export async function sendJobRecruiterEmail(
+  jobId: string,
+  input: RecruiterEmailSendRequest,
+): Promise<RecruiterEmailSendResult> {
+  return fetchApi<RecruiterEmailSendResult>(
+    `/jobs/${encodeURIComponent(jobId)}/email/send`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function generateJobCoverLetter(
+  jobId: string,
+): Promise<JobCoverLetterResult> {
+  return fetchApi<JobCoverLetterResult>(
+    `/jobs/${encodeURIComponent(jobId)}/cover-letter`,
+    { method: "POST", body: JSON.stringify({}) },
   );
 }
 

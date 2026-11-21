@@ -6,6 +6,7 @@ import { jobsMaintenanceRouter } from "./maintenance";
 import { jobsMutationsRouter } from "./mutations";
 import { jobsNotesRouter } from "./notes";
 import { jobsReadRouter } from "./read";
+import { jobsRecruiterEmailRouter } from "./recruiter-email";
 import { jobsStagesRouter } from "./stages";
 
 export const jobsRouter = Router();
@@ -16,5 +17,6 @@ jobsRouter.use(jobsNotesRouter);
 jobsRouter.use(jobsStagesRouter);
 jobsRouter.use(jobsDocumentsRouter);
 jobsRouter.use(jobsApplicationRouter);
+jobsRouter.use(jobsRecruiterEmailRouter);
 jobsRouter.use(jobsMaintenanceRouter);
 jobsRouter.use(jobsMutationsRouter);

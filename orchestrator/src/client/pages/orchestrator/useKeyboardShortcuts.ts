@@ -1,19 +1,17 @@
 import * as api from "@client/api";
+import { useJobPdfViewer } from "@client/components/pdf/JobPdfViewerProvider";
 import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
 } from "@client/hooks/queries/useJobMutations";
 import { useHotkeys } from "@client/hooks/useHotkeys";
-import { useProfile } from "@client/hooks/useProfile";
-import { useSettings } from "@client/hooks/useSettings";
-import { resolveFilenameLanguage } from "@client/lib/pdf-filename";
-import { downloadJobPdf, openJobPdf } from "@client/lib/private-pdf";
+import { downloadJobPdf } from "@client/lib/private-pdf";
 import { SHORTCUTS } from "@client/lib/shortcut-map";
+import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import type { JobAction, JobListItem } from "@shared/types.js";
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { showErrorToast } from "@/client/lib/error-toast";
-import { safeFilenamePart } from "@/lib/utils";
 import type { FilterTab } from "./constants";
 import { tabs } from "./constants";
 
@@ -63,11 +61,9 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
   } = args;
 
   const shortcutActionInFlight = useRef(false);
+  const { openJobPdf } = useJobPdfViewer();
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
-  const { settings } = useSettings();
-  const { personName, profile } = useProfile();
-  const filenameLanguage = resolveFilenameLanguage({ settings, profile });
 
   const navigateJobList = useCallback(
     (direction: 1 | -1) => {
@@ -233,9 +229,11 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
       [SHORTCUTS.viewPdf.key]: () => {
         if (!selectedJob) return;
         if (activeTab !== "ready") return;
-        void openJobPdf(selectedJob.id).catch((error) => {
-          showErrorToast(error, "Could not open PDF");
-        });
+        openJobPdf(
+          selectedJob.id,
+          selectedJob.title,
+          tailoredResumeFilename(selectedJob.employer),
+        );
       },
 
       [SHORTCUTS.downloadPdf.key]: () => {
@@ -243,11 +241,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
         if (activeTab !== "ready") return;
         void downloadJobPdf(
           selectedJob.id,
-          `${safeFilenamePart(personName || "Unknown", {
-            language: filenameLanguage,
-          })}_${safeFilenamePart(selectedJob.employer, {
-            language: filenameLanguage,
-          })}.pdf`,
+          tailoredResumeFilename(selectedJob.employer),
         ).catch((error) => {
           showErrorToast(error, "Could not download PDF");
         });

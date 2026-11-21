@@ -9,5 +9,6 @@ export * from "./language-detection";
 export * from "./location-support";
 export * from "./resume-projects";
 export * from "./stage-history";
+export * from "./tailored-document-filenames";
 export * from "./types";
 export * from "./utils/type-conversion";

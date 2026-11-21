@@ -1,4 +1,6 @@
+import { CoverLetterModal } from "@client/components/CoverLetterModal";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
+import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import {
   type ApplicationStage,
   type ApplicationTask,
@@ -31,6 +33,7 @@ import {
 import { toast } from "sonner";
 import { JobBriefPane } from "@/client/components/JobBriefPane";
 import { JobDescriptionPanel } from "@/client/components/JobDescriptionPanel";
+import { useJobPdfViewer } from "@/client/components/pdf/JobPdfViewerProvider";
 import { invalidateJobData } from "@/client/hooks/queries/invalidate";
 import {
   useCheckSponsorMutation,
@@ -40,7 +43,6 @@ import {
   useSkipJobMutation,
   useUpdateJobMutation,
 } from "@/client/hooks/queries/useJobMutations";
-import { useProfile } from "@/client/hooks/useProfile";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { useSettings } from "@/client/hooks/useSettings";
 import { celebrateOffer } from "@/client/lib/celebrate";
@@ -48,7 +50,6 @@ import { showErrorToast } from "@/client/lib/error-toast";
 import { uploadJobPdfFromFile } from "@/client/lib/job-pdf-upload";
 import { getRenderableJobDescription } from "@/client/lib/jobDescription";
 import { logJobStageEvent } from "@/client/lib/logJobStageEvent";
-import { resolveFilenameLanguage } from "@/client/lib/pdf-filename";
 import {
   getPdfActionLabels,
   isPdfRegenerating,
@@ -56,7 +57,7 @@ import {
   PDF_REGENERATING_MESSAGE,
   STALE_PDF_MESSAGE,
 } from "@/client/lib/pdf-freshness";
-import { downloadJobPdf, openJobPdf } from "@/client/lib/private-pdf";
+import { downloadJobPdf } from "@/client/lib/private-pdf";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,6 @@ import {
   formatJobForWebhook,
   formatJobSourceLabel,
   formatTimestamp,
-  safeFilenamePart,
   sourceLabel as sourceLabels,
 } from "@/lib/utils";
 import * as api from "../api";
@@ -138,6 +138,7 @@ const parseSelectedProjectIds = (value: string | null | undefined) =>
 
 export const JobPage: React.FC = () => {
   const { id, view } = useParams<{ id: string; view?: string }>();
+  const { openJobPdf } = useJobPdfViewer();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -146,6 +147,7 @@ export const JobPage: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [isDeleteJobModalOpen, setIsDeleteJobModalOpen] = React.useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = React.useState(false);
+  const [isCoverLetterOpen, setIsCoverLetterOpen] = React.useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = React.useState(false);
   const [activeAction, setActiveAction] = React.useState<string | null>(null);
   const [eventToDelete, setEventToDelete] = React.useState<string | null>(null);
@@ -156,8 +158,6 @@ export const JobPage: React.FC = () => {
   const pendingEventRef = React.useRef<StageEvent | null>(null);
   const uploadPdfInputRef = React.useRef<HTMLInputElement | null>(null);
   const { settings } = useSettings();
-  const { profile } = useProfile();
-  const filenameLanguage = resolveFilenameLanguage({ settings, profile });
   const openEditDetails = React.useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
   }, []);
@@ -492,14 +492,11 @@ export const JobPage: React.FC = () => {
 
   const handleDownloadPdf = async () => {
     if (!job || !job.pdfPath || pdfActionsDisabled) return;
-    const filename = `${safeFilenamePart(job.employer, {
-      language: filenameLanguage,
-    })}-${safeFilenamePart(job.title, {
-      language: filenameLanguage,
-    })}-resume.pdf`;
-    await downloadJobPdf(job.id, filename).catch((error) => {
-      showErrorToast(error, "Could not download PDF");
-    });
+    await downloadJobPdf(job.id, tailoredResumeFilename(job.employer)).catch(
+      (error) => {
+        showErrorToast(error, "Could not download PDF");
+      },
+    );
   };
 
   const handleViewJobDescription = () => {
@@ -813,13 +810,11 @@ export const JobPage: React.FC = () => {
                   onUploadPdf={() => uploadPdfInputRef.current?.click()}
                   onViewPdf={() => {
                     if (pdfActionsDisabled) return;
-                    void openJobPdf(job.id).catch((error) => {
-                      toast.error(
-                        error instanceof Error
-                          ? error.message
-                          : "Could not open PDF",
-                      );
-                    });
+                    openJobPdf(
+                      job.id,
+                      job.title,
+                      tailoredResumeFilename(job.employer),
+                    );
                   }}
                   onDownloadPdf={() => void handleDownloadPdf()}
                   onRegeneratePdf={() => void handleRegeneratePdf()}
@@ -940,15 +935,14 @@ export const JobPage: React.FC = () => {
               onEditTailoring={() => navigate(`/jobs/ready/${job.id}`)}
               onViewPdf={() => {
                 if (pdfActionsDisabled) return;
-                void openJobPdf(job.id).catch((error) => {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not open PDF",
-                  );
-                });
+                openJobPdf(
+                  job.id,
+                  job.title,
+                  tailoredResumeFilename(job.employer),
+                );
               }}
               onDownloadPdf={() => void handleDownloadPdf()}
+              onGenerateCoverLetter={() => setIsCoverLetterOpen(true)}
               onUploadPdf={() => uploadPdfInputRef.current?.click()}
               onRegeneratePdf={() => void handleRegeneratePdf()}
               onSkip={() => void handleSkip()}
@@ -961,6 +955,16 @@ export const JobPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {job ? (
+        <CoverLetterModal
+          open={isCoverLetterOpen}
+          onOpenChange={setIsCoverLetterOpen}
+          jobId={job.id}
+          jobTitle={job.title}
+          employer={job.employer}
+        />
+      ) : null}
 
       <LogEventModal
         isOpen={isLogModalOpen}

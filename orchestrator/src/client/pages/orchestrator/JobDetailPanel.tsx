@@ -4,10 +4,13 @@ import {
   JobDescriptionPanel,
   JobHeader,
 } from "@client/components";
+import { ComposeEmailModal } from "@client/components/ComposeEmailModal";
+import { CoverLetterModal } from "@client/components/CoverLetterModal";
 import { GhostwriterDrawer } from "@client/components/ghostwriter/GhostwriterDrawer";
 import { JobDetailsEditDrawer } from "@client/components/JobDetailsEditDrawer";
 import { KbdHint } from "@client/components/KbdHint";
 import { OpenJobListingButton } from "@client/components/OpenJobListingButton";
+import { useJobPdfViewer } from "@client/components/pdf/JobPdfViewerProvider";
 import { Tip } from "@client/components/Tip";
 import { TooltipWhenDisabled } from "@client/components/TooltipWhenDisabled";
 import { TailoringWorkspace } from "@client/components/tailoring/TailoringWorkspace";
@@ -15,11 +18,9 @@ import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
 } from "@client/hooks/queries/useJobMutations";
-import { useProfile } from "@client/hooks/useProfile";
 import { useRescoreJob } from "@client/hooks/useRescoreJob";
 import { useSettings } from "@client/hooks/useSettings";
 import { uploadJobPdfFromFile } from "@client/lib/job-pdf-upload";
-import { resolveFilenameLanguage } from "@client/lib/pdf-filename";
 import {
   getPdfActionLabels,
   isPdfRegenerating,
@@ -27,8 +28,9 @@ import {
   PDF_REGENERATING_MESSAGE,
   STALE_PDF_MESSAGE,
 } from "@client/lib/pdf-freshness";
-import { downloadJobPdf, openJobPdf } from "@client/lib/private-pdf";
+import { downloadJobPdf } from "@client/lib/private-pdf";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
+import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import type {
   Job,
   JobListItem,
@@ -47,7 +49,9 @@ import {
   FolderKanban,
   Link2,
   Loader2,
+  Mail,
   MoreHorizontal,
+  PenLine,
   RefreshCcw,
   Sparkles,
   Star,
@@ -72,12 +76,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trackProductEvent } from "@/lib/analytics";
-import {
-  cn,
-  copyTextToClipboard,
-  formatJobForWebhook,
-  safeFilenamePart,
-} from "@/lib/utils";
+import { cn, copyTextToClipboard, formatJobForWebhook } from "@/lib/utils";
 import type { FilterTab } from "./constants";
 import type { SelectedJobLoadState } from "./useOrchestratorData";
 
@@ -292,10 +291,13 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   onRetrySelectedJob,
 }) => {
   const navigate = useNavigate();
+  const { openJobPdf } = useJobPdfViewer();
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("brief");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
+  const [isComposeEmailOpen, setIsComposeEmailOpen] = useState(false);
+  const [isCoverLetterOpen, setIsCoverLetterOpen] = useState(false);
   const [catalog, setCatalog] = useState<ResumeProjectCatalogItem[]>([]);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [openedListingJobIds, setOpenedListingJobIds] = useState<Set<string>>(
@@ -307,18 +309,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const skipJobMutation = useSkipJobMutation();
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
   const { settings } = useSettings();
-  const { personName, profile } = useProfile();
-  const filenameLanguage = resolveFilenameLanguage({ settings, profile });
 
   const jobLink = selectedJob
     ? selectedJob.applicationLink || selectedJob.jobUrl
     : "#";
   const selectedPdfFilename = selectedJob
-    ? `${safeFilenamePart(personName || "Unknown", {
-        language: filenameLanguage,
-      })}_${safeFilenamePart(selectedJob.employer || "Unknown", {
-        language: filenameLanguage,
-      })}.pdf`
+    ? tailoredResumeFilename(selectedJob.employer)
     : "resume.pdf";
   const storedSelectedProjectIds = useMemo(
     () => selectedJob?.selectedProjectIds?.split(",").filter(Boolean) ?? [],
@@ -524,10 +520,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const handleOpenPdf = useCallback(() => {
     if (!selectedJob || !selectedJob.pdfPath || isPdfRegenerating(selectedJob))
       return;
-    void openJobPdf(selectedJob.id).catch((error) => {
-      showErrorToast(error, "Could not open PDF");
-    });
-  }, [selectedJob]);
+    openJobPdf(
+      selectedJob.id,
+      selectedJob.title,
+      tailoredResumeFilename(selectedJob.employer),
+    );
+  }, [openJobPdf, selectedJob]);
 
   const handleDownloadPdf = useCallback(() => {
     if (!selectedJob || !selectedJob.pdfPath || isPdfRegenerating(selectedJob))
@@ -764,6 +762,13 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                   Copy job info
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  onSelect={() => setIsComposeEmailOpen(true)}
+                  disabled={!selectedJob.pdfPath}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email recruiter
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onSelect={() => rescoreJob(selectedJob.id)}
                   disabled={isRescoring}
                 >
@@ -911,7 +916,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground/75">
                         {applicationKitReady
-                          ? "Tailored summary, skills, and PDF are ready for this role."
+                          ? "Tailored summary, skills, and PDF are ready. Use Apply now to review the cover letter and send the CV."
                           : "Check the application kit before submitting this role."}
                       </p>
                     </div>
@@ -930,7 +935,27 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 </div>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-5">
+              <TooltipWhenDisabled
+                reason={
+                  !selectedJob.pdfPath
+                    ? "Generate a tailored PDF first."
+                    : pdfRegeneratingReason
+                }
+                className="w-full"
+              >
+                <Button
+                  size="sm"
+                  className="w-full justify-center"
+                  onClick={() => setIsComposeEmailOpen(true)}
+                  disabled={
+                    !selectedJob.pdfPath || primaryBusy || isRegeneratingPdf
+                  }
+                >
+                  <Mail className="size-3.5" />
+                  Apply now
+                </Button>
+              </TooltipWhenDisabled>
               <TooltipWhenDisabled
                 reason={pdfRegeneratingReason}
                 className="w-full"
@@ -946,6 +971,15 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                   <KbdHint shortcut="d" className="ml-auto" />
                 </Button>
               </TooltipWhenDisabled>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsCoverLetterOpen(true)}
+                disabled={primaryBusy}
+              >
+                <PenLine className="size-3.5" />
+                Cover letter
+              </Button>
               <OpenJobListingButton
                 href={jobLink}
                 size="sm"
@@ -1049,6 +1083,22 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
               void handleUploadPdf(file);
             }
           }}
+        />
+
+        <ComposeEmailModal
+          open={isComposeEmailOpen}
+          onOpenChange={setIsComposeEmailOpen}
+          jobId={selectedJob.id}
+          jobTitle={selectedJob.title}
+          employer={selectedJob.employer}
+          onSent={() => void onJobUpdated()}
+        />
+        <CoverLetterModal
+          open={isCoverLetterOpen}
+          onOpenChange={setIsCoverLetterOpen}
+          jobId={selectedJob.id}
+          jobTitle={selectedJob.title}
+          employer={selectedJob.employer}
         />
       </div>
     </Tabs>

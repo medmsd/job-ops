@@ -101,8 +101,21 @@ vi.mock("../api", () => ({
 vi.mock("@/client/lib/private-pdf", () => ({
   createJobPdfObjectUrl: vi.fn().mockResolvedValue("blob:job-pdf"),
   downloadJobPdf: vi.fn().mockResolvedValue(undefined),
-  openJobPdf: vi.fn().mockResolvedValue(undefined),
 }));
+
+vi.mock(
+  "@/client/components/pdf/JobPdfViewerProvider",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("@/client/components/pdf/JobPdfViewerProvider")
+      >();
+    return {
+      ...actual,
+      useJobPdfViewer: () => ({ openJobPdf: vi.fn() }),
+    };
+  },
+);
 
 vi.mock("../components/JobHeader", () => ({
   JobHeader: ({ job }: { job: Job }) => (
@@ -609,7 +622,7 @@ describe("JobPage project count", () => {
 });
 
 describe("JobPage PDF filenames", () => {
-  it("downloads resume PDFs with language-aware German transliteration", async () => {
+  it("downloads resume PDFs with the readable tailored filename", async () => {
     vi.mocked(api.getJob).mockResolvedValue(
       createJob({
         id: "job-1",
@@ -643,7 +656,7 @@ describe("JobPage PDF filenames", () => {
     await waitFor(() =>
       expect(privatePdf.downloadJobPdf).toHaveBeenCalledWith(
         "job-1",
-        "Mueller_Buero-Strasse_Plattform-resume.pdf",
+        "Mohamed Mseddi Resume Müller Büro.pdf",
       ),
     );
   });

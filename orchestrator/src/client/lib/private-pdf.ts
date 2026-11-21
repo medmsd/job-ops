@@ -23,10 +23,6 @@ async function createObjectUrlFromBlob(
   return URL.createObjectURL(await loadBlob());
 }
 
-export async function openJobPdf(jobId: string): Promise<void> {
-  openBlob(await api.getJobPdfBlob(jobId));
-}
-
 export async function downloadJobPdf(
   jobId: string,
   filename: string,

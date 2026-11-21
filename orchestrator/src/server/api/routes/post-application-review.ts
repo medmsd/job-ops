@@ -10,6 +10,7 @@ import {
 } from "@server/services/post-application/review";
 import {
   APPLICATION_STAGES,
+  DEFAULT_POST_APPLICATION_PROVIDER,
   POST_APPLICATION_PROVIDERS,
   POST_APPLICATION_ROUTER_STAGE_TARGETS,
 } from "@shared/types";
@@ -17,7 +18,9 @@ import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
 const listQuerySchema = z.object({
-  provider: z.enum(POST_APPLICATION_PROVIDERS).default("gmail"),
+  provider: z
+    .enum(POST_APPLICATION_PROVIDERS)
+    .default(DEFAULT_POST_APPLICATION_PROVIDER),
   accountKey: z.string().min(1).max(255).default("default"),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
@@ -31,7 +34,9 @@ const runParamsSchema = z.object({
 });
 
 const approveBodySchema = z.object({
-  provider: z.enum(POST_APPLICATION_PROVIDERS).default("gmail"),
+  provider: z
+    .enum(POST_APPLICATION_PROVIDERS)
+    .default(DEFAULT_POST_APPLICATION_PROVIDER),
   accountKey: z.string().min(1).max(255).default("default"),
   jobId: z.string().uuid().optional(),
   stageTarget: z.enum(POST_APPLICATION_ROUTER_STAGE_TARGETS).optional(),
@@ -41,14 +46,18 @@ const approveBodySchema = z.object({
 });
 
 const denyBodySchema = z.object({
-  provider: z.enum(POST_APPLICATION_PROVIDERS).default("gmail"),
+  provider: z
+    .enum(POST_APPLICATION_PROVIDERS)
+    .default(DEFAULT_POST_APPLICATION_PROVIDER),
   accountKey: z.string().min(1).max(255).default("default"),
   decidedBy: z.string().max(255).optional(),
 });
 
 const actionBodySchema = z.object({
   action: z.enum(["approve", "deny"]),
-  provider: z.enum(POST_APPLICATION_PROVIDERS).default("gmail"),
+  provider: z
+    .enum(POST_APPLICATION_PROVIDERS)
+    .default(DEFAULT_POST_APPLICATION_PROVIDER),
   accountKey: z.string().min(1).max(255).default("default"),
   decidedBy: z.string().max(255).optional(),
 });

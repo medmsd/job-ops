@@ -73,7 +73,7 @@ function parseGmailCredentials(
   };
 }
 
-function headerValue(
+export function headerValue(
   headers: Array<{ name?: string; value?: string }>,
   name: string,
 ): string {
@@ -83,7 +83,7 @@ function headerValue(
   return String(found?.value ?? "");
 }
 
-function parseFromHeader(fromHeader: string): {
+export function parseFromHeader(fromHeader: string): {
   fromAddress: string;
   fromDomain: string | null;
   senderName: string | null;

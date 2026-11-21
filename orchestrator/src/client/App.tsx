@@ -12,19 +12,21 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { CSSTransition, SwitchTransition } from "react-transition-group";
-
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { AppModeContext } from "./components/layout";
 import { OnboardingGate } from "./components/OnboardingGate";
+import { JobPdfViewerProvider } from "./components/pdf/JobPdfViewerProvider";
 import { useAnalyticsIdentity } from "./hooks/useAnalyticsIdentity";
 import { useDemoInfo } from "./hooks/useDemoInfo";
 import { setAuthNavigator } from "./lib/auth-navigation";
 import { DesignResumePage } from "./pages/DesignResumePage";
 import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
+import { GraphOauthCallbackPage } from "./pages/GraphOauthCallbackPage";
 import { HomePage } from "./pages/HomePage";
 import { InProgressBoardPage } from "./pages/InProgressBoardPage";
 import { JobPage } from "./pages/JobPage";
+import { JobPdfViewerPage } from "./pages/JobPdfViewerPage";
 import { OfflinePage } from "./pages/OfflinePage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
@@ -156,68 +158,78 @@ export const App: React.FC = () => {
           </div>
         </div>
       )}
-      <div>
-        <SwitchTransition mode="out-in">
-          <CSSTransition
-            key={pageKey}
-            nodeRef={nodeRef}
-            timeout={100}
-            classNames="page"
-            unmountOnExit
-          >
-            <div ref={nodeRef}>
-              <Routes location={location}>
-                {/* Backwards-compatibility redirects */}
-                {REDIRECTS.map(({ from, to }) => (
-                  <Route
-                    key={from}
-                    path={from}
-                    element={<Navigate to={to} replace />}
-                  />
-                ))}
+      <JobPdfViewerProvider>
+        <div>
+          <SwitchTransition mode="out-in">
+            <CSSTransition
+              key={pageKey}
+              nodeRef={nodeRef}
+              timeout={100}
+              classNames="page"
+              unmountOnExit
+            >
+              <div ref={nodeRef}>
+                <Routes location={location}>
+                  {/* Backwards-compatibility redirects */}
+                  {REDIRECTS.map(({ from, to }) => (
+                    <Route
+                      key={from}
+                      path={from}
+                      element={<Navigate to={to} replace />}
+                    />
+                  ))}
 
-                {/* Application routes */}
-                <Route path="/overview" element={<HomePage />} />
-                <Route
-                  path="/oauth/gmail/callback"
-                  element={<GmailOauthCallbackPage />}
-                />
-                <Route path="/job/:id" element={<JobPage />} />
-                <Route path="/job/:id/:view" element={<JobPage />} />
-                <Route
-                  path="/applications/in-progress"
-                  element={<InProgressBoardPage />}
-                />
-                <Route path="/design-resume" element={<DesignResumePage />} />
-                <Route
-                  path="/design-resume/:section"
-                  element={<DesignResumePage />}
-                />
-                <Route path="/onboarding" element={<OnboardingPage />} />
-                <Route path="/offline" element={<OfflinePage />} />
-                <Route path="/sign-in" element={<SignInPage />} />
-                <Route
-                  path="/sso/callback/:provider"
-                  element={<SsoCallbackPage />}
-                />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/tracer-links" element={<TracerLinksPage />} />
-                <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
-                <Route
-                  path="/tracking-inbox"
-                  element={<TrackingInboxRoute />}
-                />
-                <Route path="/watchlist" element={<WatchlistPage />} />
-                <Route path="/jobs/:tab" element={<OrchestratorPage />} />
-                <Route
-                  path="/jobs/:tab/:jobId"
-                  element={<OrchestratorPage />}
-                />
-              </Routes>
-            </div>
-          </CSSTransition>
-        </SwitchTransition>
-      </div>
+                  {/* Application routes */}
+                  <Route path="/overview" element={<HomePage />} />
+                  <Route
+                    path="/oauth/gmail/callback"
+                    element={<GmailOauthCallbackPage />}
+                  />
+                  <Route
+                    path="/oauth/graph/callback"
+                    element={<GraphOauthCallbackPage />}
+                  />
+                  <Route
+                    path="/job/:id/pdf-viewer"
+                    element={<JobPdfViewerPage />}
+                  />
+                  <Route path="/job/:id" element={<JobPage />} />
+                  <Route path="/job/:id/:view" element={<JobPage />} />
+                  <Route
+                    path="/applications/in-progress"
+                    element={<InProgressBoardPage />}
+                  />
+                  <Route path="/design-resume" element={<DesignResumePage />} />
+                  <Route
+                    path="/design-resume/:section"
+                    element={<DesignResumePage />}
+                  />
+                  <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route path="/offline" element={<OfflinePage />} />
+                  <Route path="/sign-in" element={<SignInPage />} />
+                  <Route
+                    path="/sso/callback/:provider"
+                    element={<SsoCallbackPage />}
+                  />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/tracer-links" element={<TracerLinksPage />} />
+                  <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
+                  <Route
+                    path="/tracking-inbox"
+                    element={<TrackingInboxRoute />}
+                  />
+                  <Route path="/watchlist" element={<WatchlistPage />} />
+                  <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+                  <Route
+                    path="/jobs/:tab/:jobId"
+                    element={<OrchestratorPage />}
+                  />
+                </Routes>
+              </div>
+            </CSSTransition>
+          </SwitchTransition>
+        </div>
+      </JobPdfViewerProvider>
 
       <Toaster position="bottom-right" richColors closeButton />
     </>

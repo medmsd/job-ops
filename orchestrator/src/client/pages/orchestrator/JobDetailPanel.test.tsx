@@ -155,7 +155,35 @@ vi.mock("@client/api", () => ({
 
 vi.mock("@client/lib/private-pdf", () => ({
   downloadJobPdf: vi.fn().mockResolvedValue(undefined),
-  openJobPdf: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock(
+  "@client/components/pdf/JobPdfViewerProvider",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("@client/components/pdf/JobPdfViewerProvider")
+      >();
+    return {
+      ...actual,
+      useJobPdfViewer: () => ({ openJobPdf: vi.fn() }),
+    };
+  },
+);
+
+vi.mock("@client/components/ComposeEmailModal", () => ({
+  ComposeEmailModal: ({
+    open,
+    jobTitle,
+  }: {
+    open: boolean;
+    jobTitle?: string | null;
+  }) => (open ? <div data-testid="compose-email-modal">{jobTitle}</div> : null),
+}));
+
+vi.mock("@client/components/CoverLetterModal", () => ({
+  CoverLetterModal: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="cover-letter-modal" /> : null,
 }));
 
 vi.mock("sonner", () => ({
@@ -327,6 +355,54 @@ describe("JobDetailPanel", () => {
     }
   });
 
+  it("opens the cover-letter review dialog from Apply now", async () => {
+    const job = createJob({
+      status: "ready",
+      title: "Platform Engineer",
+      pdfPath: "data/pdfs/job-1.pdf",
+    });
+
+    await renderJobDetailPanel({
+      activeTab: "ready",
+      activeJobs: [job],
+      selectedJob: job,
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /apply/i }));
+    const applyNow = within(getApplyPanel()).getByRole("button", {
+      name: /apply now/i,
+    });
+    expect(applyNow).toBeEnabled();
+
+    fireEvent.click(applyNow);
+    expect(screen.getByTestId("compose-email-modal")).toBeInTheDocument();
+  });
+
+  it("opens the cover letter dialog from the Apply tab", async () => {
+    const job = createJob({
+      status: "ready",
+      employer: "Acme",
+      pdfPath: "data/pdfs/job-1.pdf",
+    });
+
+    await renderJobDetailPanel({
+      activeTab: "ready",
+      activeJobs: [job],
+      selectedJob: job,
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /apply/i }));
+    fireEvent.click(
+      within(getApplyPanel()).getByRole("button", { name: /cover letter/i }),
+    );
+
+    expect(screen.getByTestId("cover-letter-modal")).toBeInTheDocument();
+  });
+
   it("shows stale PDF copy and old-PDF actions in the application kit", async () => {
     const job = createJob({
       status: "ready",
@@ -393,24 +469,7 @@ describe("JobDetailPanel", () => {
     expect(markApplied).toHaveClass("bg-emerald-600");
   });
 
-  it("downloads PDFs with language-aware German transliteration", async () => {
-    mockSettings.settings = createAppSettings({
-      chatStyleLanguageMode: {
-        value: "manual",
-        default: "manual",
-        override: null,
-      },
-      chatStyleManualLanguage: {
-        value: "german",
-        default: "english",
-        override: null,
-      },
-    });
-    vi.mocked(api.getProfile).mockResolvedValue({
-      basics: {
-        name: "Müller",
-      },
-    });
+  it("downloads PDFs with the readable tailored filename", async () => {
     const job = createJob({
       id: "job-1",
       employer: "Büro Straße",
@@ -431,7 +490,7 @@ describe("JobDetailPanel", () => {
     await waitFor(() =>
       expect(privatePdf.downloadJobPdf).toHaveBeenCalledWith(
         "job-1",
-        "Mueller_Buero_Strasse.pdf",
+        "Mohamed Mseddi Resume Büro Straße.pdf",
       ),
     );
   });

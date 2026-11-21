@@ -1,7 +1,7 @@
 ---
 id: post-application-workflow
 title: Post-Application Workflow
-description: Track post-application progress manually, or configure automatic Gmail syncing and inbox review.
+description: Track post-application progress manually, configure automatic Gmail or Outlook syncing, and email a recruiter after tailoring.
 sidebar_position: 2
 ---
 
@@ -9,10 +9,11 @@ sidebar_position: 2
 
 After a job is marked `applied`, use this workflow to track what happens next.
 
-You have two valid paths:
+You have three valid paths:
 
 - **Manual tracking**: update stages/events yourself.
-- **Automatic Gmail sync**: let email ingestion route events into inbox/review flow.
+- **Automatic email sync**: let Gmail or Microsoft Graph ingestion route events into inbox/review flow.
+- **Recruiter email**: after tailoring a resume, preview and send an application email with the tailored PDF attached.
 
 ## Option A: Manual event tracking
 
@@ -66,6 +67,8 @@ For exact Google Cloud steps and scope requirements, see:
 
 - [Gmail OAuth Setup](/docs/next/getting-started/gmail-oauth-setup)
 
+Outlook uses Microsoft Graph instead. Set `GRAPH_OAUTH_CLIENT_ID`, `GRAPH_OAUTH_CLIENT_SECRET`, and optionally `GRAPH_OAUTH_TENANT_ID` (defaults to `common`) and `GRAPH_OAUTH_REDIRECT_URI`, then select provider `Microsoft Graph` and click **Connect**. See [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
+
 Then in app:
 
 1. Open Tracking Inbox / provider controls.
@@ -113,11 +116,47 @@ curl -X POST "http://localhost:3001/api/post-application/inbox/<messageId>/deny"
   -d '{"provider":"gmail","accountKey":"default"}'
 ```
 
+## Option C: Email the recruiter after tailoring
+
+Use this when a tracked recruitment email has been matched to a job and you want to reply with your tailored resume. This path uses Microsoft Graph (Outlook) only; it does not use Gmail.
+
+### Prerequisites
+
+1. **Microsoft Graph is connected** with delegated `Mail.Send` granted and consented. See [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
+2. **A recruitment email is tracked** for the job and matched to it in the Tracking Inbox. The `From` address of that email is used as the recipient.
+3. **A tailored PDF exists** for the job. If the resume has not been tailored and generated, the **Apply now** / **Email recruiter** action is unavailable.
+
+### Preview and confirm flow
+
+1. Open the job, select the **Apply** tab, and click **Apply now** (or use **Email recruiter** in **More actions**).
+2. JobOps generates a cover letter from the job details and tailored resume, then shows a preview with the recipient, subject, editable cover letter, message, and attached PDF. Use **Preview PDF** to inspect the CV in a popup on the current page.
+3. Edit the recipient (single address only), subject, cover letter, and message as needed. Editing the cover letter updates the message automatically.
+4. Check the confirmation box and click **Send email**.
+
+Nothing is sent at the preview step. Sending requires the explicit confirmation checkbox. There is no auto-send, bulk send, scheduled send, or hidden BCC. The preview token is short-lived (10 minutes by default), single-use, and scoped to the signed-in user and workspace.
+
+### API example
+
+```bash
+# 1. Preview (no email is sent)
+curl -X POST "http://localhost:3001/api/jobs/<jobId>/email/preview" \
+  -H "content-type: application/json" \
+  -d '{"messageId":"<matchedMessageId>"}'
+
+# 2. Confirm and send with the returned previewToken
+curl -X POST "http://localhost:3001/api/jobs/<jobId>/email/send" \
+  -H "content-type: application/json" \
+  -d '{"previewToken":"<previewToken>","to":"recruiter@example.com","subject":"Application","body":"..."}'
+```
+
+The attachment is the tailored PDF JobOps already generated for that job. Files larger than 4 MB are rejected before a preview is created.
+
 ## Which option should you use?
 
 - Choose **manual** if your volume is low and you want direct control.
-- Choose **automatic Gmail sync** if your volume is higher and you want less repetitive triage.
-- Many users combine both: auto-sync first, manual adjustments for edge cases.
+- Choose **automatic sync** if your volume is higher and you want less repetitive triage.
+- Choose **recruiter email** when you want to respond to a matched recruitment email with your tailored resume, with full preview control.
+- Many users combine all three: auto-sync first, manual adjustments for edge cases, then email the recruiter after tailoring.
 
 ## Common problems
 
@@ -136,6 +175,14 @@ curl -X POST "http://localhost:3001/api/post-application/inbox/<messageId>/deny"
 
 - Use the manual tracking path only.
 - The post-application workflow still works without Gmail integration.
+
+### Email recruiter points to the wrong address
+
+The recipient defaults to the `From` address of the matched tracked email. Edit the **To** field in the preview before confirming. Only one plain email address is accepted; display names and address lists are rejected.
+
+### Sending fails with a Mail.Send permission message
+
+The Graph connection was authorized before `Mail.Send` was added. Disconnect and reconnect Microsoft Graph, approve the permission on the consent screen, then retry. See [Re-consent after adding Mail.Send](/docs/next/getting-started/microsoft-graph-oauth-setup#re-consent-after-adding-mailsend).
 
 ## Related pages
 

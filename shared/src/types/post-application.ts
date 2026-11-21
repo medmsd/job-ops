@@ -1,6 +1,9 @@
-export const POST_APPLICATION_PROVIDERS = ["gmail", "imap"] as const;
+export const POST_APPLICATION_PROVIDERS = ["gmail", "imap", "graph"] as const;
 export type PostApplicationProvider =
   (typeof POST_APPLICATION_PROVIDERS)[number];
+
+export const DEFAULT_POST_APPLICATION_PROVIDER: PostApplicationProvider =
+  "graph";
 
 export const POST_APPLICATION_PROVIDER_ACTIONS = [
   "connect",
@@ -163,6 +166,22 @@ export interface PostApplicationProviderActionResponse {
   accountKey: string;
   status: PostApplicationProviderStatus;
   message?: string;
+}
+
+export interface PostApplicationLastMessagePreview {
+  id: string;
+  fromAddress: string;
+  senderName: string | null;
+  subject: string;
+  receivedAt: number;
+  snippet: string;
+  webLink: string | null;
+}
+
+export interface PostApplicationLastMessageResponse {
+  provider: PostApplicationProvider;
+  accountKey: string;
+  message: PostApplicationLastMessagePreview | null;
 }
 
 export interface PostApplicationInboxItem {
