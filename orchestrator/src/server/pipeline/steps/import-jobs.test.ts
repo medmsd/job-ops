@@ -1,3 +1,4 @@
+import { createJob } from "@shared/testing/factories";
 import type { CreateJobInput } from "@shared/types";
 import { describe, expect, it, vi } from "vitest";
 import { importJobsStep } from "./import-jobs";
@@ -39,5 +40,33 @@ describe("importJobsStep", () => {
       title: job.title,
       employer: job.employer,
     });
+  });
+
+  it("returns the jobs created during this import", async () => {
+    const jobsRepo = await import("@server/repositories/jobs");
+    const createdJob = createJob({
+      id: "new-job",
+      title: "Frontend Engineer",
+      employer: "Monzo",
+      status: "discovered",
+    });
+    vi.mocked(jobsRepo.createJobs).mockResolvedValueOnce({
+      created: 1,
+      skipped: 0,
+      createdJobs: [createdJob],
+    });
+
+    const result = await importJobsStep({
+      discoveredJobs: [
+        {
+          source: "linkedin",
+          title: "Frontend Engineer",
+          employer: "Monzo",
+          jobUrl: "https://example.com/jobs/2",
+        },
+      ],
+    });
+
+    expect(result.createdJobs).toEqual([createdJob]);
   });
 });

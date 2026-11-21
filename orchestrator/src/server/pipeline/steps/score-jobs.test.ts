@@ -476,4 +476,50 @@ describe("scoreJobsStep auto-skip behavior", () => {
     expect(vi.mocked(scorer.scoreJobSuitability)).not.toHaveBeenCalled();
     expect(vi.mocked(jobsRepo.updateJob)).not.toHaveBeenCalled();
   });
+
+  it("scores only jobs created in the current run and ignores the unscored backlog", async () => {
+    const jobsRepo = await import("@server/repositories/jobs");
+    const scorer = await import("@server/services/scorer");
+
+    const freshJob = createJob({
+      id: "fresh-job",
+      title: "Fresh Backend Role",
+      employer: "NewCo",
+      status: "discovered",
+      suitabilityScore: null,
+      suitabilityReason: null,
+    });
+
+    const result = await scoreJobsStep({ profile: {}, jobs: [freshJob] });
+
+    expect(jobsRepo.getUnscoredDiscoveredJobs).not.toHaveBeenCalled();
+    expect(scorer.scoreJobSuitability).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "fresh-job" }),
+      {},
+    );
+    expect(jobsRepo.updateJob).toHaveBeenCalledWith(
+      "fresh-job",
+      expect.objectContaining({ suitabilityScore: 40 }),
+    );
+    expect(jobsRepo.updateJob).not.toHaveBeenCalledWith(
+      "job-1",
+      expect.anything(),
+    );
+    expect(result.scoredJobs.map((job) => job.id)).toEqual(["fresh-job"]);
+  });
+
+  it("skips scoring entirely when the run discovered no new jobs", async () => {
+    const jobsRepo = await import("@server/repositories/jobs");
+    const scorer = await import("@server/services/scorer");
+    const { progressHelpers } = await import("../progress");
+
+    const result = await scoreJobsStep({ profile: {}, jobs: [] });
+
+    expect(result.scoredJobs).toEqual([]);
+    expect(result.unprocessedJobs).toEqual([]);
+    expect(jobsRepo.getUnscoredDiscoveredJobs).not.toHaveBeenCalled();
+    expect(scorer.scoreJobSuitability).not.toHaveBeenCalled();
+    expect(jobsRepo.updateJob).not.toHaveBeenCalled();
+    expect(progressHelpers.scoringComplete).toHaveBeenCalledWith(0);
+  });
 });

@@ -1,12 +1,17 @@
 import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
 import { deduplicateJobsByTitleAndEmployer } from "@shared/job-matching.js";
-import type { CreateJobInput } from "@shared/types";
+import type { CreateJobInput, Job } from "@shared/types";
 import { progressHelpers } from "../progress";
 
 export async function importJobsStep(args: {
   discoveredJobs: CreateJobInput[];
-}): Promise<{ created: number; skipped: number; fuzzyMerged: number }> {
+}): Promise<{
+  created: number;
+  skipped: number;
+  fuzzyMerged: number;
+  createdJobs: Job[];
+}> {
   logger.info("Importing discovered jobs", {
     discovered: args.discoveredJobs.length,
   });
@@ -22,7 +27,7 @@ export async function importJobsStep(args: {
     });
   }
 
-  const { created, skipped } = await jobsRepo.createJobs(
+  const { created, skipped, createdJobs } = await jobsRepo.createJobs(
     dedupedJobs,
     (job, index, total) =>
       progressHelpers.importingJob(index, total, {
@@ -40,5 +45,5 @@ export async function importJobsStep(args: {
 
   progressHelpers.importComplete(created, skipped + fuzzyMerged);
 
-  return { created, skipped, fuzzyMerged };
+  return { created, skipped, fuzzyMerged, createdJobs };
 }

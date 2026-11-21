@@ -541,9 +541,8 @@ export async function runPipeline(
 
       ensureNotCancelled(scopeKey);
       jobsDiscovered = discoveredJobs.length;
-      const { created, skipped, fuzzyMerged } = await importJobsStep({
-        discoveredJobs,
-      });
+      const { created, skipped, fuzzyMerged, createdJobs } =
+        await importJobsStep({ discoveredJobs });
 
       await persistResultSummary({ stage: "import" });
       await pipelineRepo.updatePipelineRun(pipelineRun.id, {
@@ -558,6 +557,7 @@ export async function runPipeline(
         try {
           ({ scoredJobs } = await scoreJobsStep({
             profile,
+            jobs: createdJobs,
             scoringInstructions: mergedConfig.scoringInstructions,
             visaSponsorCountryKey: mergedConfig.locationIntent?.selectedCountry,
             hostedUsageReserved: true,

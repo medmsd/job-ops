@@ -554,11 +554,15 @@ export async function createJobs(input: CreateJobInput): Promise<Job>;
 export async function createJobs(
   inputs: CreateJobInput[],
   onProgress?: (input: CreateJobInput, index: number, total: number) => void,
-): Promise<{ created: number; skipped: number }>;
+): Promise<{
+  created: number;
+  skipped: number;
+  createdJobs: Job[];
+}>;
 export async function createJobs(
   inputOrInputs: CreateJobInput | CreateJobInput[],
   onProgress?: (input: CreateJobInput, index: number, total: number) => void,
-): Promise<Job | { created: number; skipped: number }> {
+): Promise<Job | { created: number; skipped: number; createdJobs: Job[] }> {
   if (!Array.isArray(inputOrInputs)) {
     const inserted = await tryInsertJob(inputOrInputs);
     if (inserted) return inserted;
@@ -587,10 +591,11 @@ export async function createJobs(
   let created = 0;
   let skipped = 0;
   let processed = 0;
+  const createdJobs: Job[] = [];
 
   const uniqueUrls = Array.from(byUrl.keys());
   if (uniqueUrls.length === 0) {
-    return { created, skipped };
+    return { created, skipped, createdJobs };
   }
 
   const existingRows = await db
@@ -615,10 +620,11 @@ export async function createJobs(
     }
 
     created += 1;
+    createdJobs.push(inserted);
     skipped += count - 1;
   }
 
-  return { created, skipped };
+  return { created, skipped, createdJobs };
 }
 
 /**

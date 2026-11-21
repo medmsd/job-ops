@@ -26,13 +26,16 @@ const SYSTEMIC_FAILURE_THRESHOLD = 3;
 
 export async function scoreJobsStep(args: {
   profile: Record<string, unknown>;
+  /** Jobs discovered during the current run. When omitted, the unscored backlog is used. */
+  jobs?: Job[];
   scoringInstructions?: string;
   visaSponsorCountryKey?: string | null;
   shouldCancel?: () => boolean;
   hostedUsageReserved?: boolean;
 }): Promise<{ unprocessedJobs: Job[]; scoredJobs: ScoredJob[] }> {
   logger.info("Running scoring step");
-  const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
+  const unprocessedJobs =
+    args.jobs ?? (await jobsRepo.getUnscoredDiscoveredJobs());
 
   // Check if auto-skip threshold is configured
   const autoSkipThresholdRaw = await settingsRepo.getSetting(
