@@ -963,6 +963,8 @@ export const JobPage: React.FC = () => {
           jobId={job.id}
           jobTitle={job.title}
           employer={job.employer}
+          savedLetter={job.coverLetter}
+          onSaved={loadData}
         />
       ) : null}
 

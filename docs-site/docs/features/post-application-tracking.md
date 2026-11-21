@@ -135,15 +135,20 @@ There is no auto-send, bulk send, or scheduled send in this version.
 If the job post has no recruiter email, you can still use the generated materials:
 
 - The **Download PDF** action saves the tailored CV as `Mohamed Mseddi Resume {CompanyName}.pdf` (for example, `Mohamed Mseddi Resume Dwareapps.pdf`). The same filename is used for the email attachment when applying through JobOps.
-- The **Cover letter** button (Apply tab) and **Generate cover letter** button (job page sidebar) generate a letter from the job description and tailored resume. Review or edit it in the dialog, then choose **Download .txt** to save `Mohamed Mseddi Cover Letter {CompanyName}.txt` or **Download .pdf** to save `Mohamed Mseddi Cover Letter {CompanyName}.pdf`. Both use the edited text and the same company name as the tailored CV. **Regenerate** creates a fresh draft.
+- The **Cover letter** button (Apply tab) and **Cover letter** button (job page sidebar) open a letter drafted from the job description and tailored resume. Opening the dialog only loads the saved copy; it never calls the AI. Click **Generate** (or **Regenerate**) to create a fresh draft. Review or edit the text, then click **Save** to persist your changes for that job. Choose **Download .txt** to save `Mohamed Mseddi Cover Letter {CompanyName}.txt` or **Download .pdf** to save `Mohamed Mseddi Cover Letter {CompanyName}.pdf`. Both downloads use the text currently in the editor and the same company name as the tailored CV. A saved letter is also reused by the recruiter-email preview.
 
-No email is required or sent when generating or downloading these files.
+No email is required or sent when generating, saving, or downloading these files.
 
 ```bash
-# Generate a cover letter only (no email is sent)
+# Generate a cover letter only (no email is sent); the result is saved
 curl -X POST "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
   -H "content-type: application/json" \
   -d '{}'
+
+# Save edited text without calling the AI
+curl -X PUT "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
+  -H "content-type: application/json" \
+  -d '{"coverLetter":"Dear hiring team, ..."}'
 ```
 
 ## Privacy and security
@@ -168,7 +173,8 @@ curl -X POST "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
 | POST   | `/api/post-application/providers/gmail/oauth/exchange` | Exchange OAuth code |
 | POST   | `/api/jobs/:id/email/preview`         | Preview a recruiter email (no send) |
 | POST   | `/api/jobs/:id/email/send`            | Confirm and send a previewed email |
-| POST   | `/api/jobs/:id/cover-letter`          | Generate a reviewable cover letter |
+| POST   | `/api/jobs/:id/cover-letter`          | Generate and save a cover letter  |
+| PUT    | `/api/jobs/:id/cover-letter`          | Save edited cover letter text     |
 
 ## Common problems
 

@@ -203,6 +203,19 @@ export async function generateJobCoverLetter(
   );
 }
 
+export async function saveJobCoverLetter(
+  jobId: string,
+  coverLetter: string,
+): Promise<JobCoverLetterResult> {
+  return fetchApi<JobCoverLetterResult>(
+    `/jobs/${encodeURIComponent(jobId)}/cover-letter`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ coverLetter }),
+    },
+  );
+}
+
 export async function createJobNote(
   jobId: string,
   input: import("@shared/types").CreateJobNoteInput,

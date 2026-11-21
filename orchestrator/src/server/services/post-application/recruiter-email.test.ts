@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getJobById: vi.fn(),
+  saveJobCoverLetter: vi.fn(),
   listMessages: vi.fn(),
   pdfExists: vi.fn(),
   getPdfPath: vi.fn(),
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@server/repositories/jobs", () => ({
   getJobById: mocks.getJobById,
+  saveJobCoverLetter: mocks.saveJobCoverLetter,
 }));
 vi.mock("@server/repositories/post-application-messages", () => ({
   listPostApplicationMessagesForJob: mocks.listMessages,
@@ -90,6 +92,10 @@ describe("recruiter email service", () => {
       tailoredHeadline: "Engineer",
       tailoredSummary: "Experienced engineer",
       tailoredSkills: "TypeScript",
+    });
+    mocks.saveJobCoverLetter.mockResolvedValue({
+      id: "job-1",
+      coverLetter: COVER_LETTER,
     });
     mocks.listMessages.mockResolvedValue({
       items: [
@@ -217,6 +223,31 @@ describe("recruiter email service", () => {
     );
     expect(mocks.listMessages).not.toHaveBeenCalled();
     expect(mocks.pdfExists).not.toHaveBeenCalled();
+    expect(mocks.saveJobCoverLetter).toHaveBeenCalledWith(
+      "job-1",
+      COVER_LETTER,
+    );
+  });
+
+  it("reuses a saved cover letter for the email preview without calling the LLM", async () => {
+    mocks.getJobById.mockResolvedValueOnce({
+      id: "job-1",
+      title: "Software Engineer",
+      employer: "Acme",
+      location: "London",
+      jobDescription: "Build things",
+      tailoredHeadline: "Engineer",
+      tailoredSummary: "Experienced engineer",
+      tailoredSkills: "TypeScript",
+      coverLetter: "Dear Acme, my edited letter.",
+    });
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
+    expect(preview.coverLetter).toBe("Dear Acme, my edited letter.");
+    expect(preview.body).toContain("Dear Acme, my edited letter.");
+    expect(mocks.callJson).not.toHaveBeenCalled();
+    expect(mocks.saveJobCoverLetter).not.toHaveBeenCalled();
   });
 
   it("rejects preview when no tailored PDF exists", async () => {

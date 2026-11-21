@@ -244,7 +244,9 @@ export async function generateJobCoverLetter(input: {
     }),
   });
 
-  logger.info("Job cover letter generated", {
+  await jobsRepo.saveJobCoverLetter(job.id, coverLetter);
+
+  logger.info("Job cover letter generated and saved", {
     route: "POST /api/jobs/:id/cover-letter",
     jobId: job.id,
   });
@@ -252,6 +254,21 @@ export async function generateJobCoverLetter(input: {
   return {
     jobId: job.id,
     coverLetter,
+    filename: tailoredCoverLetterFilename(job.employer),
+  };
+}
+
+/** Persist an edited cover letter without invoking the LLM. */
+export async function saveJobCoverLetterForJob(input: {
+  jobId: string;
+  coverLetter: string | null;
+}): Promise<JobCoverLetterResult> {
+  const job = await jobsRepo.saveJobCoverLetter(input.jobId, input.coverLetter);
+  if (!job) throw notFound("Job not found");
+
+  return {
+    jobId: job.id,
+    coverLetter: job.coverLetter ?? "",
     filename: tailoredCoverLetterFilename(job.employer),
   };
 }
@@ -363,20 +380,26 @@ export async function previewRecruiterEmail(input: {
     `Application for ${job.title?.trim() || "the role"} - ${candidateName}`,
     200,
   );
-  const coverLetter = await generateCoverLetter({
-    jobId: job.id,
-    messages: buildCoverLetterMessages({
-      jobTitle: job.title ?? "",
-      employer: job.employer ?? "",
-      location: job.location ?? "",
-      jobDescription: job.jobDescription ?? "",
-      tailoredHeadline: job.tailoredHeadline ?? "",
-      tailoredSummary: job.tailoredSummary ?? "",
-      tailoredSkills: job.tailoredSkills ?? "",
-      candidateName,
-      recruiterSubject: message.subject,
-    }),
-  });
+  const savedCoverLetter = job.coverLetter?.trim() ?? "";
+  const coverLetter =
+    savedCoverLetter ||
+    (await generateCoverLetter({
+      jobId: job.id,
+      messages: buildCoverLetterMessages({
+        jobTitle: job.title ?? "",
+        employer: job.employer ?? "",
+        location: job.location ?? "",
+        jobDescription: job.jobDescription ?? "",
+        tailoredHeadline: job.tailoredHeadline ?? "",
+        tailoredSummary: job.tailoredSummary ?? "",
+        tailoredSkills: job.tailoredSkills ?? "",
+        candidateName,
+        recruiterSubject: message.subject,
+      }),
+    }));
+  if (!savedCoverLetter) {
+    await jobsRepo.saveJobCoverLetter(job.id, coverLetter);
+  }
   const body = `${coverLetter.trim()}\n\nKind regards,\n${candidateName}`;
 
   const stored = createRecruiterEmailPreview({

@@ -676,6 +676,21 @@ export async function updateJob(
   return getJobById(id);
 }
 
+/**
+ * Persist the generated or user-edited cover letter for a job.
+ * Scoped to the active tenant/user like every other job write.
+ */
+export async function saveJobCoverLetter(
+  id: string,
+  coverLetter: string | null,
+): Promise<Job | null> {
+  await db
+    .update(jobs)
+    .set({ coverLetter, updatedAt: new Date().toISOString() })
+    .where(and(jobsScopeFilter(), eq(jobs.id, id)));
+  return getJobById(id);
+}
+
 export async function finalizeGeneratedPdfIfCurrent(input: {
   id: string;
   expectedStatus: JobStatus;
@@ -895,6 +910,7 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     closedAt: row.closedAt ?? null,
     suitabilityScore: row.suitabilityScore,
     suitabilityReason: row.suitabilityReason,
+    coverLetter: row.coverLetter ?? null,
     jobBrief: row.jobBrief ?? null,
     tailoredSummary: row.tailoredSummary,
     tailoredHeadline: row.tailoredHeadline ?? null,

@@ -63,6 +63,11 @@ See [Find jobs](/docs/next/features/pipeline-run) for the search review flow.
    2. Top jobs above threshold are auto-processed.
    3. Jobs move directly to `ready` with generated PDFs.
 
+Fit scores are stored with each job. Opening a job (including old jobs) only
+reads the stored score and does not call the AI. After you update your CV or
+tailoring, use the **Rescore** button in the job page actions to recalculate
+that job's score explicitly.
+
 When you select a job, the detail panel shows the available title, employer,
 status, and listing information immediately. A loading skeleton fills the
 remaining detail area until the full job arrives. If that request fails, use

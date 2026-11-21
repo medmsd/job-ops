@@ -1703,6 +1703,106 @@ describe.sequential("Jobs API routes", () => {
     expect(vi.mocked(getProfile)).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a stored score when an old job is opened", async () => {
+    const { createJob, updateJob, getJobById } = await import(
+      "@server/repositories/jobs"
+    );
+    const { scoreJobSuitability } = await import("@server/services/scorer");
+    const { getProfile } = await import("@server/services/profile");
+
+    const job = await createJob({
+      source: "manual",
+      title: "Old Role",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/stored-score",
+      jobDescription: "Test description",
+    });
+    await updateJob(job.id, {
+      status: "discovered",
+      suitabilityScore: 73,
+      suitabilityReason: "Saved fit",
+    });
+    vi.mocked(scoreJobSuitability).mockResolvedValue({
+      score: 11,
+      reason: "Should not run on read",
+      jobBrief: null,
+    });
+
+    const firstRes = await fetch(`${baseUrl}/api/jobs/${job.id}`);
+    const secondRes = await fetch(`${baseUrl}/api/jobs/${job.id}`);
+    const first = await firstRes.json();
+    const second = await secondRes.json();
+
+    expect(firstRes.status).toBe(200);
+    expect(secondRes.status).toBe(200);
+    expect(first.data.suitabilityScore).toBe(73);
+    expect(second.data.suitabilityScore).toBe(73);
+    expect((await getJobById(job.id))?.suitabilityScore).toBe(73);
+    expect(scoreJobSuitability).not.toHaveBeenCalled();
+    expect(getProfile).not.toHaveBeenCalled();
+  });
+
+  it("updates the stored score only when rescore is requested", async () => {
+    const { createJob, getJobById, updateJob } = await import(
+      "@server/repositories/jobs"
+    );
+    const { scoreJobSuitability } = await import("@server/services/scorer");
+
+    const job = await createJob({
+      source: "manual",
+      title: "Rescore Role",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/explicit-rescore",
+      jobDescription: "Test description",
+    });
+    await updateJob(job.id, {
+      status: "discovered",
+      suitabilityScore: 40,
+      suitabilityReason: "Old fit",
+    });
+    vi.mocked(scoreJobSuitability).mockResolvedValue({
+      score: 91,
+      reason: "Updated fit",
+      jobBrief: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/jobs/${job.id}/rescore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.suitabilityScore).toBe(91);
+    expect((await getJobById(job.id))?.suitabilityScore).toBe(91);
+    expect(scoreJobSuitability).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists a cover letter and returns it on later job reads", async () => {
+    const { createJob, saveJobCoverLetter } = await import(
+      "@server/repositories/jobs"
+    );
+
+    const job = await createJob({
+      source: "manual",
+      title: "Letter Role",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/saved-cover-letter",
+      jobDescription: "Test description",
+    });
+    const saved = await saveJobCoverLetter(job.id, "Dear Acme, edited text.");
+
+    expect(saved?.coverLetter).toBe("Dear Acme, edited text.");
+
+    const res = await fetch(`${baseUrl}/api/jobs/${job.id}`);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.coverLetter).toBe("Dear Acme, edited text.");
+  });
+
   it("streams job action progress with done counters", async () => {
     const { createJob, updateJob } = await import("@server/repositories/jobs");
     const discovered = await createJob({

@@ -179,6 +179,7 @@ const pipelineRunsHasConfigSnapshot = tableHasColumn(
 const pipelineRunsHasTenantId = tableHasColumn("pipeline_runs", "tenant_id");
 const jobsHasPdfRegenerating = tableHasColumn("jobs", "pdf_regenerating");
 const jobsHasJobBrief = tableHasColumn("jobs", "job_brief");
+const jobsHasCoverLetter = tableHasColumn("jobs", "cover_letter");
 const watchlistJobStatesHasUserId = tableHasColumn(
   "watchlist_job_states",
   "user_id",
@@ -319,6 +320,7 @@ const migrations = [
     closed_at INTEGER,
     suitability_score REAL,
     suitability_reason TEXT,
+    cover_letter TEXT,
     job_brief TEXT,
     tailored_summary TEXT,
     tailored_headline TEXT,
@@ -1004,6 +1006,7 @@ const migrations = [
     closed_at INTEGER,
     suitability_score REAL,
     suitability_reason TEXT,
+    cover_letter TEXT,
     job_brief TEXT,
     tailored_summary TEXT,
     tailored_headline TEXT,
@@ -1032,7 +1035,7 @@ const migrations = [
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, location_evidence, degree_required, starting, job_description, status, outcome, closed_at,
-    suitability_score, suitability_reason, job_brief, tailored_summary, tailored_headline, tailored_skills,
+    suitability_score, suitability_reason, cover_letter, job_brief, tailored_summary, tailored_headline, tailored_skills,
     selected_project_ids, pdf_path, pdf_source, pdf_regenerating, pdf_fingerprint, pdf_generated_at, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
     ready_at,
     applied_at, created_at, updated_at
@@ -1044,7 +1047,7 @@ const migrations = [
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, location_evidence, degree_required, starting, job_description, status, outcome, closed_at,
-    suitability_score, suitability_reason, ${jobsHasJobBrief ? "job_brief" : "NULL"}, tailored_summary, tailored_headline, tailored_skills,
+    suitability_score, suitability_reason, ${jobsHasCoverLetter ? "cover_letter" : "NULL"}, ${jobsHasJobBrief ? "job_brief" : "NULL"}, tailored_summary, tailored_headline, tailored_skills,
     selected_project_ids, pdf_path, pdf_source, ${jobsHasPdfRegenerating ? "pdf_regenerating" : "0"}, pdf_fingerprint, pdf_generated_at, tracer_links_enabled, sponsor_match_score, sponsor_match_names, discovered_at, processed_at,
     ready_at,
     applied_at, created_at, updated_at
@@ -1208,6 +1211,9 @@ const migrations = [
        'offer',
        'closed'
      )`,
+
+  // Saved cover letters: keep the user's generated or edited letter per job.
+  `ALTER TABLE jobs ADD COLUMN cover_letter TEXT`,
 
   // Branching conversations: add parent_message_id and active_child_id to job_chat_messages
   `ALTER TABLE job_chat_messages ADD COLUMN parent_message_id TEXT`,

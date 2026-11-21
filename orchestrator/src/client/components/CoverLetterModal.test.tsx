@@ -5,11 +5,13 @@ import { CoverLetterModal } from "./CoverLetterModal";
 
 const mocks = vi.hoisted(() => ({
   generate: vi.fn(),
+  save: vi.fn(),
   buildPdf: vi.fn(),
 }));
 
 vi.mock("@client/api", () => ({
   generateJobCoverLetter: mocks.generate,
+  saveJobCoverLetter: mocks.save,
 }));
 
 vi.mock("@client/lib/cover-letter-pdf", () => ({
@@ -51,6 +53,7 @@ describe("CoverLetterModal", () => {
     vi.clearAllMocks();
     clickedAnchor = null;
     mocks.generate.mockResolvedValue(result);
+    mocks.save.mockResolvedValue(result);
     mocks.buildPdf.mockReturnValue(
       new Blob(["%PDF-1.4"], { type: "application/pdf" }),
     );
@@ -73,7 +76,28 @@ describe("CoverLetterModal", () => {
     vi.restoreAllMocks();
   });
 
-  it("generates and displays an editable cover letter on open", async () => {
+  it("loads a saved letter on open without calling the AI", () => {
+    render(
+      <CoverLetterModal
+        open
+        onOpenChange={vi.fn()}
+        jobId="job-1"
+        jobTitle="Engineer"
+        employer="Acme"
+        savedLetter="Saved letter."
+      />,
+    );
+
+    expect(screen.getByLabelText("Generated cover letter")).toHaveValue(
+      "Saved letter.",
+    );
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /regenerate/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("generates only when the user asks, and keeps the letter editable", async () => {
     render(
       <CoverLetterModal
         open
@@ -84,6 +108,10 @@ describe("CoverLetterModal", () => {
       />,
     );
 
+    expect(screen.getByLabelText("Generated cover letter")).toHaveValue("");
+    expect(mocks.generate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^generate$/i }));
     await waitFor(() => {
       expect(screen.getByLabelText("Generated cover letter")).toHaveValue(
         result.coverLetter,
@@ -99,14 +127,42 @@ describe("CoverLetterModal", () => {
     );
   });
 
-  it("downloads the edited letter with the generated filename", async () => {
-    render(<CoverLetterModal open onOpenChange={vi.fn()} jobId="job-1" />);
+  it("saves edits explicitly without generating another letter", async () => {
+    const onSaved = vi.fn();
+    render(
+      <CoverLetterModal
+        open
+        onOpenChange={vi.fn()}
+        jobId="job-1"
+        employer="Acme"
+        savedLetter="Original letter."
+        onSaved={onSaved}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Generated cover letter"), {
+      target: { value: "Edited letter." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Generated cover letter")).toHaveValue(
-        result.coverLetter,
-      );
+      expect(mocks.save).toHaveBeenCalledWith("job-1", "Edited letter.");
     });
+    expect(onSaved).toHaveBeenCalled();
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+  });
+
+  it("downloads the edited letter with the company filename", async () => {
+    render(
+      <CoverLetterModal
+        open
+        onOpenChange={vi.fn()}
+        jobId="job-1"
+        employer="Acme"
+        savedLetter="Original letter."
+      />,
+    );
 
     fireEvent.change(screen.getByLabelText("Generated cover letter"), {
       target: { value: "Edited letter." },
@@ -116,18 +172,22 @@ describe("CoverLetterModal", () => {
     expect(createObjectURL).toHaveBeenCalledWith(
       expect.objectContaining({ type: "text/plain;charset=utf-8" }),
     );
-    expect(clickedAnchor?.download).toBe(result.filename);
+    expect(clickedAnchor?.download).toBe(
+      "Mohamed Mseddi Cover Letter Acme.txt",
+    );
     expect(clickedAnchor?.href).toBe("blob:cover-letter");
   });
 
   it("downloads the edited letter as a PDF with a matching filename", async () => {
-    render(<CoverLetterModal open onOpenChange={vi.fn()} jobId="job-1" />);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText("Generated cover letter")).toHaveValue(
-        result.coverLetter,
-      );
-    });
+    render(
+      <CoverLetterModal
+        open
+        onOpenChange={vi.fn()}
+        jobId="job-1"
+        employer="Acme"
+        savedLetter="Original letter."
+      />,
+    );
 
     fireEvent.change(screen.getByLabelText("Generated cover letter"), {
       target: { value: "Edited letter." },
@@ -144,8 +204,16 @@ describe("CoverLetterModal", () => {
   });
 
   it("regenerates when requested and shows failures", async () => {
-    render(<CoverLetterModal open onOpenChange={vi.fn()} jobId="job-1" />);
+    render(
+      <CoverLetterModal
+        open
+        onOpenChange={vi.fn()}
+        jobId="job-1"
+        employer="Acme"
+      />,
+    );
 
+    fireEvent.click(screen.getByRole("button", { name: /^generate$/i }));
     await waitFor(() => {
       expect(screen.getByLabelText("Generated cover letter")).toHaveValue(
         result.coverLetter,

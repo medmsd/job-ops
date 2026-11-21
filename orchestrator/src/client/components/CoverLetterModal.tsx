@@ -1,8 +1,11 @@
 import * as api from "@client/api";
 import { buildCoverLetterPdf } from "@client/lib/cover-letter-pdf";
-import { coverLetterPdfFilename } from "@shared/tailored-document-filenames.js";
+import {
+  coverLetterPdfFilename,
+  tailoredCoverLetterFilename,
+} from "@shared/tailored-document-filenames.js";
 import type { JobCoverLetterResult } from "@shared/types.js";
-import { Download, FileText, Loader2, RefreshCcw } from "lucide-react";
+import { Download, FileText, Loader2, RefreshCcw, Save } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,6 +27,8 @@ interface CoverLetterModalProps {
   jobId: string;
   jobTitle?: string | null;
   employer?: string | null;
+  savedLetter?: string | null;
+  onSaved?: () => void | Promise<void>;
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -50,11 +55,33 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
   jobId,
   jobTitle,
   employer,
+  savedLetter,
+  onSaved,
 }) => {
-  const [result, setResult] = React.useState<JobCoverLetterResult | null>(null);
-  const [letter, setLetter] = React.useState("");
+  const [letter, setLetter] = React.useState(savedLetter ?? "");
+  const [saved, setSaved] = React.useState(savedLetter ?? "");
   const [loading, setLoading] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Read the latest saved letter when the dialog opens. Do not overwrite text
+  // the user is editing when a background refetch refreshes the job query.
+  const savedLetterRef = React.useRef(savedLetter ?? "");
+  savedLetterRef.current = savedLetter ?? "";
+
+  React.useEffect(() => {
+    if (!open) return;
+    const initial = savedLetterRef.current;
+    setLetter(initial);
+    setSaved(initial);
+    setError(null);
+  }, [open]);
+
+  const filename = React.useMemo(
+    () => tailoredCoverLetterFilename(employer),
+    [employer],
+  );
+  const isDirty = letter !== saved;
 
   const generate = React.useCallback(async () => {
     setLoading(true);
@@ -62,8 +89,9 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
     try {
       const generated: JobCoverLetterResult =
         await api.generateJobCoverLetter(jobId);
-      setResult(generated);
       setLetter(generated.coverLetter);
+      setSaved(generated.coverLetter);
+      await onSaved?.();
     } catch (reason: unknown) {
       setError(
         reason instanceof Error
@@ -73,30 +101,36 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [jobId]);
+  }, [jobId, onSaved]);
 
-  React.useEffect(() => {
-    if (!open) {
-      setResult(null);
-      setLetter("");
-      setError(null);
-      return;
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveJobCoverLetter(jobId, letter);
+      setSaved(letter);
+      await onSaved?.();
+      toast.success("Cover letter saved");
+    } catch (reason: unknown) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Failed to save the cover letter.",
+      );
+    } finally {
+      setSaving(false);
     }
-    void generate();
-  }, [generate, open]);
+  };
 
   const handleDownloadTxt = () => {
     if (!letter.trim()) return;
-    downloadTextFile(letter, result?.filename ?? "cover-letter.txt");
+    downloadTextFile(letter, filename);
     toast.success("Cover letter downloaded");
   };
 
   const handleDownloadPdf = () => {
     if (!letter.trim()) return;
-    downloadBlob(
-      buildCoverLetterPdf(letter),
-      coverLetterPdfFilename(result?.filename ?? "cover-letter.txt"),
-    );
+    downloadBlob(buildCoverLetterPdf(letter), coverLetterPdfFilename(filename));
     toast.success("Cover letter downloaded as PDF");
   };
 
@@ -108,7 +142,7 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Generate cover letter</DialogTitle>
+          <DialogTitle>Cover letter</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
@@ -121,14 +155,28 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => void generate()}
-                disabled={loading}
+                disabled={loading || saving}
               >
                 {loading ? (
                   <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                 ) : (
                   <RefreshCcw className="mr-1.5 size-3.5" />
                 )}
-                Regenerate
+                {saved ? "Regenerate" : "Generate"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleSave()}
+                disabled={loading || saving || !isDirty}
+              >
+                {saving ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 size-3.5" />
+                )}
+                Save
               </Button>
               <Button
                 type="button"
@@ -167,13 +215,14 @@ export const CoverLetterModal: React.FC<CoverLetterModalProps> = ({
             placeholder={
               loading
                 ? "Generating cover letter…"
-                : "No cover letter generated."
+                : "No cover letter yet. Click Generate to create one."
             }
             disabled={loading}
           />
           <p className="text-xs text-muted-foreground">
-            Edit the text above before downloading. Save it as plain text or as
-            a PDF, then paste or attach it when applying manually.
+            {isDirty ? "Unsaved changes. " : ""}
+            Edits are stored only when you click Save. Downloads always use the
+            text above.
           </p>
         </div>
 

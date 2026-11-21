@@ -189,9 +189,22 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
             onClick={onGenerateCoverLetter}
           >
             <PenLine className="mr-1.5 h-3.5 w-3.5" />
-            Generate cover letter
+            Cover letter
           </Button>
         ) : null}
+
+        {(isReady || isDiscovered) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 w-full justify-start"
+            onClick={onRescore}
+            disabled={isBusy}
+          >
+            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+            Rescore
+          </Button>
+        )}
 
         <Button
           size="sm"
@@ -258,12 +271,6 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
               <Copy className="mr-2 h-4 w-4" />
               Copy job info
             </DropdownMenuItem>
-            {(isReady || isDiscovered) && (
-              <DropdownMenuItem onSelect={onRescore}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                Recalculate match
-              </DropdownMenuItem>
-            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onUploadPdf} disabled={isUploadingPdf}>
               <Upload className="mr-2 h-4 w-4" />

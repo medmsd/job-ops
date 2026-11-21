@@ -5,6 +5,7 @@ import { isDemoMode } from "@server/config/demo";
 import {
   generateJobCoverLetter,
   previewRecruiterEmail,
+  saveJobCoverLetterForJob,
   sendRecruiterEmail,
 } from "@server/services/post-application/recruiter-email";
 import { type Request, type Response, Router } from "express";
@@ -15,6 +16,10 @@ export const jobsRecruiterEmailRouter = Router();
 
 const previewRequestSchema = z.object({
   messageId: z.string().min(1).nullable().optional(),
+});
+
+const saveCoverLetterSchema = z.object({
+  coverLetter: z.string().max(20_000),
 });
 
 const sendRequestSchema = z.object({
@@ -61,6 +66,31 @@ jobsRecruiterEmailRouter.post(
       });
       logger.error("Job cover letter route failed", {
         route: "POST /api/jobs/:id/cover-letter",
+        jobId: req.params.id,
+        status: err.status,
+        code: err.code,
+      });
+      fail(res, err);
+    }
+  },
+);
+
+jobsRecruiterEmailRouter.put(
+  "/:id/cover-letter",
+  async (req: Request, res: Response) => {
+    try {
+      const input = saveCoverLetterSchema.parse(req.body ?? {});
+      const result = await saveJobCoverLetterForJob({
+        jobId: req.params.id,
+        coverLetter: input.coverLetter.trim() ? input.coverLetter : null,
+      });
+      ok(res, result);
+    } catch (error) {
+      const err = toJobsRouteError(error, {
+        invalidRequestFallbackMessage: "Invalid cover letter save request",
+      });
+      logger.error("Save job cover letter route failed", {
+        route: "PUT /api/jobs/:id/cover-letter",
         jobId: req.params.id,
         status: err.status,
         code: err.code,

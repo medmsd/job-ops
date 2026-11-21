@@ -202,6 +202,7 @@ export interface Job {
   closedAt: number | null;
   suitabilityScore: number | null; // 0-100 AI-generated score
   suitabilityReason: string | null; // AI explanation
+  coverLetter: string | null; // Saved cover letter text (generated or edited)
   jobBrief: string | null; // Generated JD brief (JSON)
   tailoredSummary: string | null; // Generated resume summary
   tailoredHeadline: string | null; // Generated resume headline

@@ -87,7 +87,7 @@ describe("JobPageRightSidebar actions", () => {
       screen.getByRole("button", { name: /copy job info/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /recalculate match/i }),
+      screen.getByRole("button", { name: /^rescore$/i }),
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: /replace pdf/i }).length,
@@ -99,7 +99,7 @@ describe("JobPageRightSidebar actions", () => {
       screen.getByRole("button", { name: /download old pdf/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /generate cover letter/i }),
+      screen.getByRole("button", { name: /^cover letter$/i }),
     ).toBeInTheDocument();
   });
 

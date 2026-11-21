@@ -13,10 +13,12 @@ const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
   send: vi.fn(),
   coverLetter: vi.fn(),
+  saveCoverLetter: vi.fn(),
 }));
 
 vi.mock("@server/services/post-application/recruiter-email", () => ({
   generateJobCoverLetter: mocks.coverLetter,
+  saveJobCoverLetterForJob: mocks.saveCoverLetter,
   previewRecruiterEmail: mocks.preview,
   sendRecruiterEmail: mocks.send,
 }));
@@ -52,6 +54,11 @@ describe.sequential("Job recruiter email routes", () => {
     mocks.coverLetter.mockResolvedValue({
       jobId: "job-1",
       coverLetter: "Dear hiring team, please consider my application.",
+      filename: "Mohamed Mseddi Cover Letter Acme.txt",
+    });
+    mocks.saveCoverLetter.mockResolvedValue({
+      jobId: "job-1",
+      coverLetter: "Edited letter",
       filename: "Mohamed Mseddi Cover Letter Acme.txt",
     });
   });
@@ -139,6 +146,40 @@ describe.sequential("Job recruiter email routes", () => {
     });
   });
 
+  it("saves an edited cover letter without generating a new one", async () => {
+    const res = await fetch(`${baseUrl}/api/jobs/job-1/cover-letter`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ coverLetter: "  Edited letter  " }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      data: { jobId: "job-1", coverLetter: "Edited letter" },
+      meta: { requestId: expect.any(String) },
+    });
+    expect(mocks.saveCoverLetter).toHaveBeenCalledWith({
+      jobId: "job-1",
+      coverLetter: "  Edited letter  ",
+    });
+    expect(mocks.coverLetter).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized cover letter save with 400", async () => {
+    const res = await fetch(`${baseUrl}/api/jobs/job-1/cover-letter`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ coverLetter: "x".repeat(20_001) }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+    expect(mocks.saveCoverLetter).not.toHaveBeenCalled();
+  });
+
   it("sends only after an explicit confirm request and returns 202", async () => {
     const res = await fetch(`${baseUrl}/api/jobs/job-1/email/send`, {
       method: "POST",
@@ -222,5 +263,22 @@ describe.sequential("Job recruiter email routes require authentication", () => {
     expect(mocks.preview).not.toHaveBeenCalled();
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.coverLetter).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated cover letter save requests", async () => {
+    const res = await fetch(`${baseUrl}/api/jobs/job-1/cover-letter`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ coverLetter: "Edited letter" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(body).toMatchObject({
+      ok: false,
+      error: { code: "UNAUTHORIZED" },
+      meta: { requestId: expect.any(String) },
+    });
+    expect(mocks.saveCoverLetter).not.toHaveBeenCalled();
   });
 });

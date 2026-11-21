@@ -1099,6 +1099,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           jobId={selectedJob.id}
           jobTitle={selectedJob.title}
           employer={selectedJob.employer}
+          savedLetter={selectedJob.coverLetter}
+          onSaved={onJobUpdated}
         />
       </div>
     </Tabs>
