@@ -180,13 +180,17 @@ What it is:
 
 - **Summary**, **Headline**, and **Tailored Skills** are editable fields for this job.
 - **Generate all** uses AI only when you explicitly click it; opening a job or tailoring panel never calls AI.
-- AI receives structured job facts (title, employer, location, parsed job brief, suitability reason, degree/disciplines, and job notes) plus your current approved tailoring values. This keeps wording grounded in the role and your existing evidence.
+- AI receives structured job facts (title, employer, location, parsed job brief, suitability reason, degree/disciplines, and job notes) plus your current approved tailoring values and the **Career Evidence Bank** from **Settings → Career Evidence Bank**. This keeps wording grounded in the role and your approved evidence.
+- The **Evidence review** panel maps job-description requirements to approved evidence. It only runs when you click **Check evidence**, and its suggestions are advisory until you accept, edit, or reject them.
 - The effective writing rules from **Settings → Writing Style & Language** appear in the panel with an **Edit in Settings** link.
 
 Why it exists:
 
 - Manual edits stay authoritative. Regeneration keeps edited fields unchanged and shows the AI wording as a suggestion instead of silently replacing your text.
 - The **Review AI suggestions** panel shows your version beside the AI version, with **Use AI draft**, **Keep mine**, and **Undo to original** actions.
+- The **Evidence review** panel prevents invented claims. Each item shows the job requirement, the evidence references behind it, a support level (**strong**, **partial**, or **unsupported**), and proposed wording. Nothing is applied until you choose **Accept**, **Edit**, or **Reject**.
+- Unsupported terms have no approved evidence and require an explicit acknowledgment before **Generate PDF** is enabled. Terms in the evidence bank's **neverClaim** list are hard-blocked: they cannot be acknowledged away and must be removed from the CV text.
+- Changing the CV after a check marks the result stale; you must run **Check evidence** again before generating a PDF.
 - The **Resume Studio baseline** panel shows the original summary, headline, and skill categories for comparison. It is read-only.
 - One readiness checklist is shared by the tailoring workspace, the application kit, and the job page. It checks job description, summary, headline, skills, selected projects, and PDF freshness.
 
@@ -198,18 +202,26 @@ How to use it:
    1. Choose **Use AI draft** to accept the suggested wording.
    2. Choose **Keep mine** to dismiss the suggestion without changing the field.
    3. Choose **Undo to original** to restore the Resume Studio value.
-4. Check the readiness banner before selecting **Generate PDF**.
-5. Use **Preview PDF** to inspect the rendered CV.
+4. Open **Evidence review** and click **Check evidence** to map job requirements to your approved evidence. This calls AI only on this explicit action.
+   1. For each item, review the support level and evidence references.
+   2. Choose **Accept** to apply the proposed wording to its target field, **Edit** to change it first, or **Reject** to dismiss it.
+5. If the evidence check flags unsupported terms, read them carefully. Check the acknowledgment box only if you can personally verify those claims. Hard-blocked **neverClaim** terms must be removed from the CV text instead.
+6. Check the readiness banner before selecting **Generate PDF**.
+7. Use **Preview PDF** to inspect the rendered CV.
 
 Common problems:
 
 - **AI wording did not replace my edit.** This is intentional. Open **Review AI suggestions** and choose **Use AI draft** if you want it.
+- **Generate PDF is disabled after an evidence check.** Unsupported terms need the acknowledgment checkbox. Hard-blocked **neverClaim** terms must be removed from the CV text and the check run again.
+- **The app says the CV changed after the evidence check.** Any edit to summary, headline, or skills invalidates the check. Click **Check evidence** again.
+- **A requirement shows as unsupported.** It has no matching entry in your approved evidence. Add verified facts in **Settings → Career Evidence Bank**, or reject the item. Do not accept wording for claims you cannot support.
 - **The app says the PDF is stale.** Regenerate the PDF after changing the JD, tailoring fields, or selected projects.
 - **Writing rules look different than expected.** Open **Settings → Writing Style & Language** from the rules strip; the panel shows effective values, not just overrides.
 
 Related pages:
 
 - [Design Resume](/docs/next/features/design-resume)
+- [Settings](/docs/next/features/settings)
 - [Ghostwriter](/docs/next/features/ghostwriter)
 
 ### Generating PDFs
