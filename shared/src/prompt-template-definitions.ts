@@ -34,6 +34,8 @@ Writing style formality: {{formality}}.
       "profileJson",
       "structuredJobContextJson",
       "approvedContextJson",
+      "evidenceBankJson",
+      "evidenceRulesBullet",
       "outputLanguage",
       "tone",
       "formality",
@@ -58,6 +60,9 @@ STRUCTURED JOB FACTS:
 CURRENT APPROVED TAILORING CONTEXT:
 {{approvedContextJson}}
 
+CAREER EVIDENCE BANK (approved facts only):
+{{evidenceBankJson}}
+
 INSTRUCTIONS:
 
 1. "headline" (String):
@@ -81,7 +86,9 @@ INSTRUCTIONS:
 
 GROUNDING AND APPROVED CONTEXT:
 - Treat "CURRENT APPROVED TAILORING CONTEXT" as user-approved wording. Preserve it unless the structured job facts clearly require a different emphasis.
+- Reorder, emphasize, and rephrase only facts present in the CAREER EVIDENCE BANK, my profile, or the approved context above. Do not create new skills, years, metrics, tools, or seniority.
 - Do not invent years, tools, metrics, responsibilities, levels, or seniority to close gaps between the JD and profile.
+{{evidenceRulesBullet}}
 
 WRITING STYLE PREFERENCES:
 - Tone: {{tone}}

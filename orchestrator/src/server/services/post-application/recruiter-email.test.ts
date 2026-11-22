@@ -196,6 +196,34 @@ describe("recruiter email service", () => {
     expect(prompt).toContain("Do not repeat any labels");
   });
 
+  it("includes whitelisted evidence facts and neverClaim rules in the cover-letter prompt", () => {
+    const messages = buildCoverLetterMessages({
+      jobTitle: "Engineer",
+      employer: "Acme",
+      location: "London",
+      jobDescription: "Java engineer",
+      tailoredHeadline: "Engineer",
+      tailoredSummary: "Experienced engineer",
+      tailoredSkills: "Java",
+      candidateName: "Jane Doe",
+      recruiterSubject: "Application for Engineer",
+      evidence: {
+        targetRoles: ["Senior Java Engineer"],
+        allowedSkills: ["Java", "Spring Boot"],
+        neverClaim: ["Kubernetes administrator"],
+      },
+    });
+
+    const systemPrompt = messages[0]?.content ?? "";
+    const prompt = messages[1]?.content ?? "";
+
+    expect(systemPrompt).toContain("facts.evidence.neverClaim");
+    expect(prompt).toContain('"targetRoles": [');
+    expect(prompt).toContain("Senior Java Engineer");
+    expect(prompt).toContain("Kubernetes administrator");
+    expect(prompt).not.toContain("evidenceNotes");
+  });
+
   it("builds a preview from the matched email, tailored context, and PDF", async () => {
     const preview = await previewRecruiterEmail({ jobId: "job-1" });
 

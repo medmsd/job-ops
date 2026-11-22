@@ -3,8 +3,10 @@
  */
 
 import { logger } from "@infra/logger";
+import type { CareerEvidenceBank } from "@shared/types/career-evidence";
 import type { ResumeProfile } from "@shared/types";
 import { stripHtmlTags } from "@shared/utils/string";
+import { buildEvidencePromptBlock, getCareerEvidenceBank } from "./careerEvidence";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { createConfiguredLlmService, resolveLlmModel } from "./modelSelection";
 import {
@@ -109,16 +111,18 @@ export async function generateTailoring(
   profile: ResumeProfile,
   context: TailoringJobContext = {},
 ): Promise<TailoringResult> {
-  const [model, writingStyle, aiProfile] = await Promise.all([
+  const [model, writingStyle, aiProfile, evidenceBank] = await Promise.all([
     resolveLlmModel("tailoring"),
     getWritingStyle(),
     filterProfileProjectsForAi(profile),
+    getCareerEvidenceBank(),
   ]);
   const prompt = await buildTailoringPrompt(
     aiProfile,
     jobDescription,
     writingStyle,
     context,
+    evidenceBank,
   );
 
   const llm = await createConfiguredLlmService("tailoring");
@@ -184,6 +188,7 @@ async function buildTailoringPrompt(
   jd: string,
   writingStyle: Awaited<ReturnType<typeof getWritingStyle>>,
   context: TailoringJobContext,
+  evidenceBank: CareerEvidenceBank,
 ): Promise<string> {
   const jobDescription = stripHtmlTags(jd);
   const resolvedLanguage = resolveWritingOutputLanguage({
@@ -230,6 +235,11 @@ async function buildTailoringPrompt(
     profileJson: JSON.stringify(relevantProfile),
     structuredJobContextJson: JSON.stringify(buildStructuredJobContext(context)),
     approvedContextJson: JSON.stringify(buildApprovedContext(context.approved)),
+    evidenceBankJson: JSON.stringify(
+      buildEvidencePromptBlock(evidenceBank, profile),
+    ),
+    evidenceRulesBullet:
+      "Terms listed in the evidence bank's neverClaim list must never appear in the output.",
     outputLanguage,
     tone: writingStyle.tone,
     formality: writingStyle.formality,

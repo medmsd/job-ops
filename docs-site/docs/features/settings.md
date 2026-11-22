@@ -174,6 +174,7 @@ Defaults and constraints:
   - removing placeholders can strip important runtime data from the prompt
   - resetting restores the shared default templates
 - Existing writing-style, language, and scoring-instructions settings still matter because the default templates consume those values through placeholders
+- The resume tailoring template also exposes `{{evidenceBankJson}}` and `{{evidenceRulesBullet}}`. These carry the whitelisted Career Evidence Bank and its `neverClaim` prohibition; removing them weakens claim grounding
 
 ### Career Evidence Bank
 

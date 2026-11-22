@@ -110,6 +110,32 @@ describe("generateTailoring", () => {
     );
   });
 
+  it("includes the evidence bank and neverClaim rule in the tailoring prompt", async () => {
+    vi.mocked(getSetting).mockImplementation(async (key) =>
+      key === "careerEvidence"
+        ? JSON.stringify({
+            targetRoles: ["Senior Java Engineer"],
+            coreSkills: [],
+            achievements: [],
+            alwaysInclude: [],
+            neverClaim: ["Kubernetes administrator"],
+            preferredTerms: [],
+            avoidTerms: [],
+          })
+        : null,
+    );
+
+    await generateTailoring("Java engineer", {
+      basics: { name: "Test User", label: "Engineer" },
+    });
+
+    const prompt = callJsonMock.mock.calls[0]?.[0]?.messages?.[0]?.content as string;
+    expect(prompt).toContain("CAREER EVIDENCE BANK (approved facts only):");
+    expect(prompt).toContain("Senior Java Engineer");
+    expect(prompt).toContain("Kubernetes administrator");
+    expect(prompt).toContain("Terms listed in the evidence bank's neverClaim list");
+  });
+
   it("omits globally excluded projects from the tailoring prompt", async () => {
     vi.mocked(getSetting).mockImplementation(async (key) =>
       key === "resumeProjects"

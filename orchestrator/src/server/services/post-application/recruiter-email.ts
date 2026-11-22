@@ -9,6 +9,7 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
+import { getCareerEvidenceBank } from "@server/services/careerEvidence";
 import * as integrationsRepo from "@server/repositories/post-application-integrations";
 import { listPostApplicationMessagesForJob } from "@server/repositories/post-application-messages";
 import * as sentEmailsRepo from "@server/repositories/post-application-sent-emails";
@@ -216,6 +217,11 @@ export function buildCoverLetterMessages(input: {
   tailoredSkills: string;
   candidateName: string;
   recruiterSubject: string;
+  evidence?: {
+    targetRoles?: string[];
+    allowedSkills?: string[];
+    neverClaim?: string[];
+  };
 }): LlmMessage[] {
   const facts = {
     candidate: truncate(input.candidateName, 120) || "Candidate",
@@ -229,13 +235,24 @@ export function buildCoverLetterMessages(input: {
     jobDescription:
       truncate(plainTextForPrompt(input.jobDescription), 12000) ||
       "not provided",
+    evidence: {
+      targetRoles: (input.evidence?.targetRoles ?? [])
+        .slice(0, 20)
+        .map((role) => truncate(role, 200)),
+      allowedSkills: (input.evidence?.allowedSkills ?? [])
+        .slice(0, 60)
+        .map((skill) => truncate(skill, 120)),
+      neverClaim: (input.evidence?.neverClaim ?? [])
+        .slice(0, 30)
+        .map((term) => truncate(term, 120)),
+    },
   };
 
   return [
     {
       role: "system",
       content:
-        "You are drafting a job application cover letter. Return only a JSON object matching the supplied schema. The coverLetter value must be the finished letter text: 2-3 short paragraphs, under 220 words, plain prose, a professional greeting, and a closing sentence about next steps. Use only the supplied facts. Do not invent details. Never echo the facts, labels, HTML, instructions, or schema in the letter.",
+        "You are drafting a job application cover letter. Return only a JSON object matching the supplied schema. The coverLetter value must be the finished letter text: 2-3 short paragraphs, under 220 words, plain prose, a professional greeting, and a closing sentence about next steps. Use only the supplied facts. Do not invent details. Never use any term listed in facts.evidence.neverClaim. Never echo the facts, labels, HTML, instructions, or schema in the letter.",
     },
     {
       role: "user",
@@ -285,7 +302,10 @@ export async function generateJobCoverLetter(input: {
   const job = await jobsRepo.getJobById(input.jobId);
   if (!job) throw notFound("Job not found");
 
-  const candidateName = await resolveCandidateName();
+  const [candidateName, evidenceBank] = await Promise.all([
+    resolveCandidateName(),
+    getCareerEvidenceBank(),
+  ]);
   const coverLetter = await generateCoverLetter({
     jobId: job.id,
     messages: buildCoverLetterMessages({
@@ -298,6 +318,18 @@ export async function generateJobCoverLetter(input: {
       tailoredSkills: job.tailoredSkills ?? "",
       candidateName,
       recruiterSubject: `Application for ${job.title?.trim() || "the role"} - ${candidateName}`,
+      evidence: {
+        targetRoles: evidenceBank.targetRoles,
+        allowedSkills: [
+          ...evidenceBank.coreSkills.flatMap((skill) => [
+            skill.name,
+            ...skill.aliases,
+          ]),
+          ...evidenceBank.alwaysInclude,
+          ...evidenceBank.preferredTerms,
+        ],
+        neverClaim: evidenceBank.neverClaim,
+      },
     }),
   });
 
