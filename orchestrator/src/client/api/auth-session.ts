@@ -95,10 +95,22 @@ function storeLegacyCredentials(credentials: AuthCredentials | null): void {
 
 function loadStoredAuthToken(): string | null {
   try {
-    return (
+    const shared = localStorage.getItem(SESSION_AUTH_TOKEN_KEY);
+    if (shared) {
+      // Older builds kept a per-tab copy; it is no longer needed.
+      sessionStorage.removeItem(SESSION_AUTH_TOKEN_KEY);
+      sessionStorage.removeItem(LEGACY_SESSION_JWT_KEY);
+      return shared;
+    }
+
+    const legacy =
       sessionStorage.getItem(SESSION_AUTH_TOKEN_KEY) ??
-      sessionStorage.getItem(LEGACY_SESSION_JWT_KEY)
-    );
+      sessionStorage.getItem(LEGACY_SESSION_JWT_KEY);
+    if (legacy) {
+      storeAuthToken(legacy);
+      return legacy;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -107,15 +119,33 @@ function loadStoredAuthToken(): string | null {
 function storeAuthToken(token: string | null): void {
   try {
     if (token) {
-      sessionStorage.setItem(SESSION_AUTH_TOKEN_KEY, token);
-      sessionStorage.removeItem(LEGACY_SESSION_JWT_KEY);
+      // localStorage is shared by every tab on this origin; sessionStorage is
+      // isolated per tab and made users sign in again in newly opened tabs.
+      localStorage.setItem(SESSION_AUTH_TOKEN_KEY, token);
     } else {
-      sessionStorage.removeItem(SESSION_AUTH_TOKEN_KEY);
-      sessionStorage.removeItem(LEGACY_SESSION_JWT_KEY);
+      localStorage.removeItem(SESSION_AUTH_TOKEN_KEY);
     }
+    sessionStorage.removeItem(SESSION_AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_SESSION_JWT_KEY);
   } catch {
     // Ignore storage errors in restricted browser contexts.
   }
+}
+
+function handleAuthTokenStorageChange(event: StorageEvent): void {
+  // The `storage` event only fires in *other* documents, so this is the signal
+  // that another tab signed in, signed out, or switched workspaces.
+  if (event.key !== SESSION_AUTH_TOKEN_KEY) return;
+  const nextToken = event.newValue;
+  if (nextToken === cachedAuthToken) return;
+
+  cachedAuthToken = nextToken;
+  cachedLegacyCredentials = null;
+  clearCachedAppData();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", handleAuthTokenStorageChange);
 }
 
 export function getCurrentAuthWorkspaceStorageScope(): string | null {

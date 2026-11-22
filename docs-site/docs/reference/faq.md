@@ -23,6 +23,12 @@ Releases create a matching `vX.Y.Z` Git tag, and the UI shows that release versi
 
 Edit files under `docs-site/docs` for latest docs.
 
+## Why did opening JobOps in a new tab ask me to sign in again?
+
+Older builds kept the sign-in token in per-tab session storage, which browsers do not share between tabs. It now lives in browser local storage, so a new tab on the same origin reuses the existing session. Signing out in one tab invalidates the session in the others on their next request. Sessions still expire 24 hours after sign-in, and signing out revokes the token immediately.
+
+Because the token is stored in the browser profile, keep your browser and operating system account protected.
+
 ## What does this cost in practice?
 
 Real-world reference: from early December 2025 to mid-February 2026, with heavy usage and testing (about 10 to 15 applications per day), easily more than 3000 jobs scored, total LLM spend was about **$12 USD** using Gemini 3 Flash through OpenRouter.
