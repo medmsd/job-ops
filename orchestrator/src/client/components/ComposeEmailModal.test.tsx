@@ -92,6 +92,28 @@ describe("ComposeEmailModal", () => {
     });
   });
 
+  it("warns when the recipient was taken from the job details", async () => {
+    mocks.preview.mockResolvedValueOnce({
+      ...preview,
+      messageId: null,
+      to: "sgoncalves@xccelerated.io",
+      recipientSource: "job",
+    });
+
+    render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("To")).toHaveValue(
+        "sgoncalves@xccelerated.io",
+      );
+    });
+    expect(
+      screen.getByText(
+        /came from the job details, not a tracked recruiter email/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("sends edited recipient, subject, and body", async () => {
     render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
 

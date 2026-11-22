@@ -195,7 +195,7 @@ Common paths:
 4. Use **Preview PDF** in the dialog to inspect the tailored CV in a popup without leaving the current page.
 5. Check the confirmation box and click **Send email**.
 
-Nothing is sent until you confirm. Sending requires a matched tracked recruitment email, a generated tailored PDF, and Microsoft Graph with delegated `Mail.Send` consent. See [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
+Nothing is sent until you confirm. The recipient defaults to a matched tracked recruitment email; when none exists, JobOps uses the first valid address from the job's `emails` field or job description and labels it in the dialog for verification. Sending requires a generated tailored PDF and Microsoft Graph with delegated `Mail.Send` consent. See [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
 
 ### Regenerating PDFs after edits (copy-pasteable examples)
 

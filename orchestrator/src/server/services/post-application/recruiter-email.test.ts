@@ -67,6 +67,18 @@ import { clearRecruiterEmailPreviews } from "./recruiter-email-store";
 
 const COVER_LETTER = "Dear hiring team, I am applying for this role.";
 
+const jobWith = (overrides: Record<string, unknown> = {}) => ({
+  id: "job-1",
+  title: "Software Engineer",
+  employer: "Acme",
+  location: "London",
+  jobDescription: "Build things",
+  tailoredHeadline: "Engineer",
+  tailoredSummary: "Experienced engineer",
+  tailoredSkills: "TypeScript",
+  ...overrides,
+});
+
 describe("recruiter email service", () => {
   let tempDir: string;
   let pdfPath: string;
@@ -200,6 +212,82 @@ describe("recruiter email service", () => {
       },
     ]);
     expect(preview.expiresAt).toBeGreaterThan(Date.now());
+    expect(preview).toMatchObject({ recipientSource: "tracked" });
+  });
+
+  it("prefers a tracked inbox email over addresses stored on the job", async () => {
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({
+        emails: "jobs@acme.com, careers@acme.com",
+        jobDescription: "Contact recruiting@acme.com",
+      }),
+    );
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
+    expect(preview).toMatchObject({
+      messageId: "msg-1",
+      to: "recruiter@example.com",
+      recipientSource: "tracked",
+    });
+  });
+
+  it("falls back to the job email field when no tracked email is linked", async () => {
+    mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({ emails: "jobs@acme.com, careers@acme.com" }),
+    );
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
+    expect(preview).toMatchObject({
+      messageId: null,
+      to: "jobs@acme.com",
+      recipientSource: "job",
+    });
+  });
+
+  it("falls back to an address in a manually edited job description", async () => {
+    mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({
+        emails: null,
+        jobDescription:
+          "Interested? Email Samantha – sgoncalves@xccelerated.io for details.",
+      }),
+    );
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
+    expect(preview).toMatchObject({
+      messageId: null,
+      to: "sgoncalves@xccelerated.io",
+      recipientSource: "job",
+    });
+
+    await sendRecruiterEmail({
+      jobId: "job-1",
+      request: { previewToken: preview.previewToken },
+    });
+
+    expect(mocks.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "sgoncalves@xccelerated.io" }),
+    );
+  });
+
+  it("rejects preview with an actionable error when no recipient can be resolved", async () => {
+    mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({ emails: null, jobDescription: "No contact details." }),
+    );
+
+    await expect(
+      previewRecruiterEmail({ jobId: "job-1" }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "UNPROCESSABLE_ENTITY",
+      message: expect.stringContaining("Tracking Inbox") as string,
+    } satisfies Partial<AppError>);
   });
 
   it("generates a downloadable cover letter without a tracked email or PDF", async () => {

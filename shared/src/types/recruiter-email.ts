@@ -11,6 +11,8 @@ export interface RecruiterEmailPreview {
   previewToken: string;
   jobId: string;
   messageId: string | null;
+  /** Where the recipient came from: a matched Tracking Inbox email or the job's own details. */
+  recipientSource?: "tracked" | "job";
   to: string;
   subject: string;
   body: string;

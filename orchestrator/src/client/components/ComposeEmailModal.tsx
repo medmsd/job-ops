@@ -188,6 +188,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 onChange={(event) => setTo(event.target.value)}
                 autoComplete="off"
               />
+              {preview.recipientSource === "job" && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  This address came from the job details, not a tracked
+                  recruiter email. Verify it before sending.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Single recipient only. No BCC is added.
               </p>

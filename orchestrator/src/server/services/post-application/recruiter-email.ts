@@ -89,6 +89,31 @@ export function recipientDomain(address: string): string {
   return at >= 0 ? address.slice(at + 1) : "unknown";
 }
 
+const EMAIL_CANDIDATE_PATTERN =
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/**
+ * Recover a recruiter address from the job itself when the Tracking Inbox has
+ * no matched message. `emails` may be comma separated; a manually edited
+ * description may contain the address in prose. Only bare, validated addresses
+ * are accepted, and the preview remains editable so an ambiguous match can be
+ * corrected before the explicit send confirmation.
+ */
+export function jobEmailCandidates(job: {
+  emails?: string | null;
+  jobDescription?: string | null;
+}): string[] {
+  const candidates: string[] = [];
+  for (const raw of [job.emails, job.jobDescription]) {
+    if (!raw) continue;
+    for (const match of raw.match(EMAIL_CANDIDATE_PATTERN) ?? []) {
+      const address = normalizeRecipientAddress(match);
+      if (address && !candidates.includes(address)) candidates.push(address);
+    }
+  }
+  return candidates;
+}
+
 function plainTextForPrompt(value: string | null | undefined): string {
   const text = (value ?? "")
     .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
@@ -352,16 +377,34 @@ export async function previewRecruiterEmail(input: {
     items.map((item) => item.message),
     input.messageId ?? null,
   );
-  if (!message) {
-    throw unprocessableEntity(
-      "No recruitment email is linked to this job. Link one in the Tracking Inbox first.",
-    );
+
+  let messageId: string | null = null;
+  let accountKey = GRAPH_ACCOUNT_KEY;
+  let recipientSource: "tracked" | "job" = "tracked";
+  let sourceSubject = "";
+  let to: string | null = null;
+
+  if (message) {
+    to = normalizeRecipientAddress(message.fromAddress);
+    if (!to) {
+      throw unprocessableEntity(
+        "The matched email has no valid recruiter reply address.",
+      );
+    }
+    messageId = message.id;
+    accountKey =
+      message.provider === "graph" ? message.accountKey : GRAPH_ACCOUNT_KEY;
+    sourceSubject = message.subject ?? "";
+  } else {
+    // No tracked message: fall back to the job's own contact data. The user
+    // still reviews and edits the recipient before any explicit confirmation.
+    recipientSource = "job";
+    to = jobEmailCandidates(job)[0] ?? null;
   }
 
-  const to = normalizeRecipientAddress(message.fromAddress);
   if (!to) {
     throw unprocessableEntity(
-      "The matched email has no valid recruiter reply address.",
+      "No recruitment email is linked to this job and no address was found in its details. Link one in the Tracking Inbox or add it to the job description first.",
     );
   }
 
@@ -394,7 +437,7 @@ export async function previewRecruiterEmail(input: {
         tailoredSummary: job.tailoredSummary ?? "",
         tailoredSkills: job.tailoredSkills ?? "",
         candidateName,
-        recruiterSubject: message.subject,
+        recruiterSubject: sourceSubject || subject,
       }),
     }));
   if (!savedCoverLetter) {
@@ -404,9 +447,8 @@ export async function previewRecruiterEmail(input: {
 
   const stored = createRecruiterEmailPreview({
     jobId: job.id,
-    messageId: message.id,
-    accountKey:
-      message.provider === "graph" ? message.accountKey : GRAPH_ACCOUNT_KEY,
+    messageId,
+    accountKey,
     to,
     subject,
     body,
@@ -418,7 +460,8 @@ export async function previewRecruiterEmail(input: {
   logger.info("Recruiter email preview created", {
     route: "POST /api/jobs/:id/email/preview",
     jobId: job.id,
-    messageId: message.id,
+    messageId,
+    recipientSource,
     recipientDomain: recipientDomain(to),
     attachmentName,
     attachmentSize: pdfInfo.size,
@@ -427,7 +470,8 @@ export async function previewRecruiterEmail(input: {
   return {
     previewToken: stored.previewToken,
     jobId: job.id,
-    messageId: message.id,
+    messageId,
+    recipientSource,
     to,
     subject,
     body,

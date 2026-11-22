@@ -123,7 +123,7 @@ Use this when a tracked recruitment email has been matched to a job and you want
 ### Prerequisites
 
 1. **Microsoft Graph is connected** with delegated `Mail.Send` granted and consented. See [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
-2. **A recruitment email is tracked** for the job and matched to it in the Tracking Inbox. The `From` address of that email is used as the recipient.
+2. **A recipient can be resolved**: either a recruitment email tracked and matched to the job in the Tracking Inbox (its `From` address is used), or a valid address in the job's `emails` field or job description. Addresses taken from job details are labelled in the preview so you can verify them.
 3. **A tailored PDF exists** for the job. If the resume has not been tailored and generated, the **Apply now** / **Email recruiter** action is unavailable.
 
 ### Preview and confirm flow
@@ -131,7 +131,7 @@ Use this when a tracked recruitment email has been matched to a job and you want
 1. Open the job, select the **Apply** tab, and click **Apply now** (or use **Email recruiter** in **More actions**).
 2. JobOps generates a cover letter from the job details and tailored resume, then shows a preview with the recipient, subject, editable cover letter, message, and attached PDF. Use **Preview PDF** to inspect the CV in a popup on the current page.
 3. Edit the recipient (single address only), subject, cover letter, and message as needed. Editing the cover letter updates the message automatically.
-4. Check the confirmation box and click **Send email**.
+4. Check the confirmation box and click **Send email**. If the recipient was pre-filled from job details, verify it first — job-post text is untrusted.
 
 Nothing is sent at the preview step. Sending requires the explicit confirmation checkbox. There is no auto-send, bulk send, scheduled send, or hidden BCC. The preview token is short-lived (10 minutes by default), single-use, and scoped to the signed-in user and workspace.
 
