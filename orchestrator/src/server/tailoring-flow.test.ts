@@ -19,7 +19,7 @@ vi.mock("@infra/product-analytics", () => ({
 vi.mock("./services/pdf-fingerprint", () => ({
   createJobPdfFingerprint: vi.fn().mockReturnValue("test-pdf-fingerprint"),
   resolvePdfFingerprintContext: vi.fn().mockResolvedValue({
-    version: "v1",
+    version: "v2",
     designResumeDocumentId: null,
     designResumeRevision: null,
     designResumeUpdatedAt: null,
@@ -37,7 +37,7 @@ describe("Tailoring Flow", () => {
       "test-pdf-fingerprint",
     );
     vi.mocked(pdfFingerprint.resolvePdfFingerprintContext).mockResolvedValue({
-      version: "v1",
+      version: "v2",
       designResumeDocumentId: null,
       designResumeRevision: null,
       designResumeUpdatedAt: null,

@@ -4,7 +4,7 @@ import type { PdfFingerprintContext } from "./pdf-fingerprint";
 import { createJobPdfFingerprint, getJobPdfFreshness } from "./pdf-fingerprint";
 
 const context: PdfFingerprintContext = {
-  version: "v1",
+  version: "v2",
   designResumeDocumentId: "design-resume-1",
   designResumeRevision: 2,
   designResumeUpdatedAt: "2026-05-01T10:00:00.000Z",
@@ -122,7 +122,7 @@ describe("PDF freshness", () => {
 
     expect(
       createJobPdfFingerprint(job, { ...context, pdfPaperSize: "auto" }),
-    ).toBe("81b507dbebf69af4959b8bde9bb93465e790076876bb6dcdbea1de596e3276c5");
+    ).toBe("446c7432dc5c79ef0b645f2d811695e4d8c59adf206ec15db07948ac845e6e59");
   });
 
   it("includes paper size changes for every renderer", () => {
@@ -140,6 +140,30 @@ describe("PDF freshness", () => {
 
       expect(new Set(fingerprints).size, pdfRenderer).toBe(3);
     }
+  });
+
+  it("includes tailored resume snapshot id and version", () => {
+    const jobs = [
+      createJob(),
+      createJob({ tailoredResumeSnapshotId: "snapshot-1" }),
+      createJob({ tailoredResumeVersion: 3 }),
+      createJob({
+        tailoredResumeSnapshotId: "snapshot-1",
+        tailoredResumeVersion: 3,
+      }),
+    ];
+    const fingerprints = jobs.map((job) => createJobPdfFingerprint(job, context));
+
+    expect(new Set(fingerprints).size).toBe(4);
+    expect(createJobPdfFingerprint(createJob(), context)).toBe(
+      createJobPdfFingerprint(
+        createJob({
+          tailoredResumeSnapshotId: null,
+          tailoredResumeVersion: null,
+        }),
+        context,
+      ),
+    );
   });
 
   it("includes resume project policy changes", () => {

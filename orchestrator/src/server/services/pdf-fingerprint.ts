@@ -12,12 +12,14 @@ import type {
 import { getCurrentDesignResumeOrNullOnLegacy } from "./design-resume";
 import { getConfiguredRxResumeBaseResumeId } from "./rxresume/baseResumeId";
 
-const PDF_FINGERPRINT_VERSION = "v1";
+const PDF_FINGERPRINT_VERSION = "v2";
 type JobPdfFingerprintInput = Pick<
   Job,
   | "tailoredSummary"
   | "tailoredHeadline"
   | "tailoredSkills"
+  | "tailoredResumeSnapshotId"
+  | "tailoredResumeVersion"
   | "selectedProjectIds"
   | "jobDescription"
   | "tracerLinksEnabled"
@@ -103,6 +105,8 @@ export function createJobPdfFingerprint(
       tailoredSummary: job.tailoredSummary ?? null,
       tailoredHeadline: job.tailoredHeadline ?? null,
       tailoredSkills: job.tailoredSkills ?? null,
+      tailoredResumeSnapshotId: job.tailoredResumeSnapshotId ?? null,
+      tailoredResumeVersion: job.tailoredResumeVersion ?? null,
       selectedProjectIds: job.selectedProjectIds ?? null,
       jobDescription: job.jobDescription ?? null,
       tracerLinksEnabled: Boolean(job.tracerLinksEnabled),

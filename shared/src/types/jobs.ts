@@ -207,6 +207,8 @@ export interface Job {
   tailoredSummary: string | null; // Generated resume summary
   tailoredHeadline: string | null; // Generated resume headline
   tailoredSkills: string | null; // Generated resume skills (JSON)
+  tailoredResumeSnapshotId: string | null;
+  tailoredResumeVersion: number | null;
   selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
   pdfSource: JobPdfSource | null; // Whether PDF was system-generated or user-uploaded

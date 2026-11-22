@@ -38,7 +38,7 @@ vi.mock("@server/tenancy/private-scope", () => ({
 
 vi.mock("./pdf-fingerprint", () => ({
   resolvePdfFingerprintContext: vi.fn().mockResolvedValue({
-    version: "v1",
+    version: "v2",
     designResumeDocumentId: null,
     designResumeRevision: null,
     designResumeUpdatedAt: null,
@@ -84,7 +84,7 @@ describe("auto PDF regeneration", () => {
     mocks.reject.mockResolvedValue(undefined);
     mocks.getReadyJobsWithGeneratedPdfs.mockResolvedValue([]);
     vi.mocked(resolvePdfFingerprintContext).mockResolvedValue({
-      version: "v1",
+      version: "v2",
       designResumeDocumentId: null,
       designResumeRevision: null,
       designResumeUpdatedAt: null,
@@ -285,7 +285,7 @@ describe("auto PDF regeneration", () => {
 
   it("enqueues Typst theme-only setting changes when Typst is active", async () => {
     vi.mocked(resolvePdfFingerprintContext).mockResolvedValue({
-      version: "v1",
+      version: "v2",
       designResumeDocumentId: null,
       designResumeRevision: null,
       designResumeUpdatedAt: null,

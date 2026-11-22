@@ -20,6 +20,8 @@ import {
   POST_APPLICATION_SENT_EMAIL_STATUSES,
   POST_APPLICATION_SYNC_RUN_STATUSES,
   SSO_PROVIDERS,
+  type TailoredResumeChange,
+  type TailoringPlanResult,
 } from "@shared/types";
 import { sql } from "drizzle-orm";
 import {
@@ -277,6 +279,8 @@ export const jobs = sqliteTable(
     tailoredSummary: text("tailored_summary"),
     tailoredHeadline: text("tailored_headline"),
     tailoredSkills: text("tailored_skills"),
+    tailoredResumeSnapshotId: text("tailored_resume_snapshot_id"),
+    tailoredResumeVersion: integer("tailored_resume_version"),
     selectedProjectIds: text("selected_project_ids"),
     pdfPath: text("pdf_path"),
     pdfSource: text("pdf_source", { enum: ["generated", "uploaded"] }),
@@ -840,6 +844,59 @@ export const designResumeAssets = sqliteTable(
   (table) => ({
     documentIndex: index("idx_design_resume_assets_document_id").on(
       table.documentId,
+    ),
+  }),
+);
+
+export const tailoredResumes = sqliteTable(
+  "tailored_resumes",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .default("tenant_default")
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    status: text("status", { enum: ["approved", "superseded"] })
+      .notNull()
+      .default("approved"),
+    origin: text("origin", { enum: ["approved", "restored"] })
+      .notNull()
+      .default("approved"),
+    resumeJson: text("resume_json", { mode: "json" }).notNull(),
+    changes: text("changes", { mode: "json" })
+      .$type<TailoredResumeChange[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    ats: text("ats", { mode: "json" }).$type<TailoringPlanResult["check"]>(),
+    model: text("model"),
+    baseResumeDocumentId: text("base_resume_document_id"),
+    baseResumeRevision: integer("base_resume_revision"),
+    generatedAt: integer("generated_at", { mode: "number" }).notNull(),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    tenantUserJobVersionUnique: uniqueIndex(
+      "idx_tailored_resumes_tenant_user_job_version_unique",
+    ).on(
+      table.tenantId,
+      sql`coalesce(${table.userId}, '')`,
+      table.jobId,
+      table.version,
+    ),
+    tenantJobStatusIndex: index("idx_tailored_resumes_tenant_job_status").on(
+      table.tenantId,
+      table.userId,
+      table.jobId,
+      table.status,
+      table.updatedAt,
     ),
   }),
 );
