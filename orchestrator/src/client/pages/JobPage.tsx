@@ -1,3 +1,4 @@
+import { ComposeEmailModal } from "@client/components/ComposeEmailModal";
 import { CoverLetterModal } from "@client/components/CoverLetterModal";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
@@ -148,6 +149,7 @@ export const JobPage: React.FC = () => {
   const [isDeleteJobModalOpen, setIsDeleteJobModalOpen] = React.useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = React.useState(false);
   const [isCoverLetterOpen, setIsCoverLetterOpen] = React.useState(false);
+  const [isComposeEmailOpen, setIsComposeEmailOpen] = React.useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = React.useState(false);
   const [activeAction, setActiveAction] = React.useState<string | null>(null);
   const [eventToDelete, setEventToDelete] = React.useState<string | null>(null);
@@ -927,6 +929,12 @@ export const JobPage: React.FC = () => {
               isUploadingPdf={isUploadingPdf}
               pdfActionsDisabled={pdfActionsDisabled}
               pdfRegeneratingReason={pdfRegeneratingReason}
+              onApply={() => setIsComposeEmailOpen(true)}
+              applyDisabledReason={
+                !job.pdfPath
+                  ? "Generate a tailored PDF first."
+                  : pdfRegeneratingReason
+              }
               pdfViewLabel={pdfLabels.view}
               pdfDownloadLabel={pdfLabels.download}
               onStartTailoring={() => navigate(`/jobs/discovered/${job.id}`)}
@@ -955,6 +963,17 @@ export const JobPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {job ? (
+        <ComposeEmailModal
+          open={isComposeEmailOpen}
+          onOpenChange={setIsComposeEmailOpen}
+          jobId={job.id}
+          jobTitle={job.title}
+          employer={job.employer}
+          onSent={() => void loadData()}
+        />
+      ) : null}
 
       {job ? (
         <CoverLetterModal
