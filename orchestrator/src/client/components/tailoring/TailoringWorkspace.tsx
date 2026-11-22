@@ -5,6 +5,7 @@ import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import type { Job } from "@shared/types.js";
+import { CHAT_STYLE_MANUAL_LANGUAGE_LABELS } from "@shared/types.js";
 import {
   Check,
   CircleAlert,
@@ -31,6 +32,13 @@ import {
   serializeTailoredSkills,
   toEditableSkillGroups,
 } from "../tailoring-utils";
+import { getTailoringReadiness } from "./rules";
+import { TailoringRulesStrip } from "./TailoringRulesStrip";
+import type {
+  TailoringBaseline,
+  TailoringReviewKey,
+  TailoringSuggestions,
+} from "./TailoringSections";
 import { TailoringSections } from "./TailoringSections";
 import {
   getTailoringSavePayloadKey,
@@ -52,12 +60,6 @@ interface TailoringWorkspaceEditorProps extends TailoringWorkspaceBaseProps {
 
 type TailoringWorkspaceProps = TailoringWorkspaceEditorProps;
 type TailoringSectionsProps = ComponentProps<typeof TailoringSections>;
-
-interface TailoringBaseline {
-  summary: string;
-  headline: string;
-  skillsJson: string;
-}
 
 type AutosaveStatus = "saved" | "unsaved" | "saving" | "error";
 type TailoringGenerateTarget =
@@ -108,7 +110,23 @@ const AutosaveStatusIcon: React.FC<{ status: AutosaveStatus }> = ({
 
 const normalizeSkillsJson = (value: string | null | undefined) =>
   serializeTailoredSkills(parseTailoredSkills(value));
-const textHasValue = (value: string) => value.trim().length > 0;
+
+const TAILORING_REVIEW_KEYS: TailoringReviewKey[] = [
+  "summary",
+  "headline",
+  "skills",
+];
+
+const TAILORING_REVIEW_LABELS: Record<TailoringReviewKey, string> = {
+  summary: "Summary",
+  headline: "Headline",
+  skills: "Tailored skills",
+};
+
+const getReviewValue = (
+  baseline: TailoringBaseline,
+  key: TailoringReviewKey,
+): string => (key === "skills" ? baseline.skillsJson : baseline[key]);
 
 const toBaselineFromJob = (job: Job): TailoringBaseline => ({
   summary: job.tailoredSummary ?? "",
@@ -189,6 +207,12 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   const [aiBaseline, setAiBaseline] = useState<TailoringBaseline>(() =>
     toBaselineFromJob(props.job),
   );
+  const [suggestions, setSuggestions] = useState<TailoringSuggestions>({});
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clear review state when switching jobs
+  useEffect(() => {
+    setSuggestions({});
+  }, [props.job.id]);
 
   useEffect(() => {
     setAiBaseline({
@@ -394,17 +418,76 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
         setGenerateTarget(target);
         await flushAutosave();
 
+        const requestedFields = TAILORING_REVIEW_KEYS.filter(
+          (key) => target === "all" || key === target,
+        );
+        const beforeGeneration: TailoringBaseline = {
+          summary,
+          headline,
+          skillsJson,
+        };
+        const manuallyEditedFields = requestedFields.filter(
+          (key) =>
+            getReviewValue(beforeGeneration, key) !==
+            getReviewValue(aiBaseline, key),
+        );
+
         const updatedJob = await api.summarizeJob(props.job.id, {
           force: true,
           fields:
             target === "all" ? ["summary", "headline", "skills"] : [target],
         });
-        applyIncomingDraft(updatedJob);
-        setAiBaseline(toBaselineFromJob(updatedJob));
+        const aiDraft = toBaselineFromJob(updatedJob);
+        const finalBaseline: TailoringBaseline = { ...aiDraft };
+        for (const key of manuallyEditedFields) {
+          const value = getReviewValue(beforeGeneration, key);
+          if (key === "summary") finalBaseline.summary = value;
+          else if (key === "headline") finalBaseline.headline = value;
+          else finalBaseline.skillsJson = value;
+        }
+
+        if (manuallyEditedFields.length > 0) {
+          await api.updateJob(props.job.id, {
+            tailoredSummary: finalBaseline.summary,
+            tailoredHeadline: finalBaseline.headline,
+            tailoredSkills: finalBaseline.skillsJson,
+            jobDescription,
+            selectedProjectIds: selectedIdsCsv,
+            tracerLinksEnabled,
+          });
+          setSuggestions((current) => {
+            const next = { ...current };
+            for (const key of manuallyEditedFields) {
+              const currentValue = getReviewValue(beforeGeneration, key);
+              const suggestedValue = getReviewValue(aiDraft, key);
+              if (suggestedValue === currentValue) continue;
+              next[key] = {
+                current: currentValue,
+                suggested: suggestedValue,
+                label: TAILORING_REVIEW_LABELS[key],
+              };
+            }
+            return next;
+          });
+        }
+
+        applyIncomingDraft({
+          ...updatedJob,
+          tailoredSummary: finalBaseline.summary,
+          tailoredHeadline: finalBaseline.headline,
+          tailoredSkills: finalBaseline.skillsJson,
+        });
+        setAiBaseline(aiDraft);
         toast.success(
           target === "all"
             ? "Draft content generated"
             : `${target[0].toUpperCase()}${target.slice(1)} generated`,
+          {
+            description:
+              manuallyEditedFields.length > 0
+                ? "Manual edits were kept. Review the AI suggestions below."
+                : undefined,
+          },
         );
         await props.onUpdate();
       } catch (error) {
@@ -413,7 +496,19 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
         setGenerateTarget(null);
       }
     },
-    [props.onUpdate, flushAutosave, props.job.id, applyIncomingDraft],
+    [
+      props.onUpdate,
+      props.job.id,
+      flushAutosave,
+      applyIncomingDraft,
+      summary,
+      headline,
+      skillsJson,
+      aiBaseline,
+      jobDescription,
+      selectedIdsCsv,
+      tracerLinksEnabled,
+    ],
   );
 
   const handleSummarizeEditor = useCallback(async () => {
@@ -533,8 +628,84 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     );
   }, [aiBaseline.skillsJson, setSkillsDraft]);
 
+  const dismissSuggestion = useCallback((key: TailoringReviewKey) => {
+    setSuggestions((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const handleAcceptSuggestion = useCallback(
+    (key: TailoringReviewKey) => {
+      const suggestion = suggestions[key];
+      if (!suggestion) return;
+      if (key === "summary") setSummary(suggestion.suggested);
+      else if (key === "headline") setHeadline(suggestion.suggested);
+      else
+        setSkillsDraft(
+          toEditableSkillGroups(parseTailoredSkills(suggestion.suggested)),
+        );
+      dismissSuggestion(key);
+    },
+    [suggestions, setSummary, setHeadline, setSkillsDraft, dismissSuggestion],
+  );
+
+  const handleKeepCurrentSuggestion = useCallback(
+    (key: TailoringReviewKey) => {
+      dismissSuggestion(key);
+    },
+    [dismissSuggestion],
+  );
+
+  const handleUndoOriginalSuggestion = useCallback(
+    (key: TailoringReviewKey) => {
+      if (key === "summary") setSummary(originalValues.summary);
+      else if (key === "headline") setHeadline(originalValues.headline);
+      else setSkillsDraft(originalValues.skillsDraft);
+      dismissSuggestion(key);
+    },
+    [originalValues, setSummary, setHeadline, setSkillsDraft, dismissSuggestion],
+  );
+
   const disableInputs = Boolean(generateTarget) || isGeneratingPdf;
-  const isDraftReady = textHasValue(summary) && textHasValue(headline);
+  const tailoringReadiness = useMemo(
+    () =>
+      getTailoringReadiness({
+        summary,
+        headline,
+        skillsJson,
+        jobDescription,
+        selectedProjectIds: selectedIdsCsv,
+        pdfFreshness: props.job.pdfFreshness,
+        pdfRegenerating: props.job.pdfRegenerating,
+        projectsAreLoading: isCatalogLoading || isSettingsLoading,
+      }),
+    [
+      summary,
+      headline,
+      skillsJson,
+      jobDescription,
+      selectedIdsCsv,
+      props.job.pdfFreshness,
+      props.job.pdfRegenerating,
+      isCatalogLoading,
+      isSettingsLoading,
+    ],
+  );
+  const isDraftReady = tailoringReadiness.canGeneratePdf;
+  const resolvedLanguage = useMemo(() => {
+    const mode = settings?.chatStyleLanguageMode.value;
+    if (mode === "match-job-description") return "Match job description";
+    if (mode === "match-resume") return "Match resume";
+    const manualLanguage = settings?.chatStyleManualLanguage.value;
+    return manualLanguage
+      ? (CHAT_STYLE_MANUAL_LANGUAGE_LABELS[manualLanguage] ?? manualLanguage)
+      : null;
+  }, [
+    settings?.chatStyleLanguageMode.value,
+    settings?.chatStyleManualLanguage.value,
+  ]);
 
   const tailoringSectionsProps = useMemo<TailoringSectionsProps>(
     () => ({
@@ -560,6 +731,15 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       isGeneratingProjects: generateTarget === "projects",
       openSkillGroupId,
       disableInputs,
+      suggestions,
+      originalBaseline: {
+        summary: originalValues.summary,
+        headline: originalValues.headline,
+        skillsJson: originalValues.skillsJson,
+      },
+      onAcceptSuggestion: handleAcceptSuggestion,
+      onKeepCurrentSuggestion: handleKeepCurrentSuggestion,
+      onUndoOriginalSuggestion: handleUndoOriginalSuggestion,
       onGenerateSummary: handleGenerateSummary,
       onGenerateHeadline: handleGenerateHeadline,
       onGenerateSkills: handleGenerateSkills,
@@ -609,6 +789,10 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       generateTarget,
       openSkillGroupId,
       disableInputs,
+      suggestions,
+      handleAcceptSuggestion,
+      handleKeepCurrentSuggestion,
+      handleUndoOriginalSuggestion,
       handleGenerateSummary,
       handleGenerateHeadline,
       handleGenerateSkills,
@@ -665,8 +849,14 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
               </p>
               <p className="mt-0.5 text-[11px] text-muted-foreground/75">
                 {isDraftReady
-                  ? "Review optional sections before generating the PDF."
-                  : "Add a summary and headline to generate the PDF."}
+                  ? "Ready for PDF generation. Review the optional sections before applying."
+                  : `To generate a PDF, complete: ${tailoringReadiness.missingLabels
+                      .filter((label) =>
+                        ["Tailored summary", "Tailored headline", "Tailored skills"].includes(
+                          label,
+                        ),
+                      )
+                      .join(", ")}.`}
               </p>
             </div>
           </div>
@@ -714,6 +904,17 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
           )}
         </div>
       </div>
+
+      <TailoringRulesStrip
+        language={resolvedLanguage}
+        tone={settings?.chatStyleTone.value}
+        formality={settings?.chatStyleFormality.value}
+        constraints={settings?.chatStyleConstraints.value}
+        doNotUse={settings?.chatStyleDoNotUse.value}
+        summaryMaxWords={settings?.chatStyleSummaryMaxWords.value}
+        maxKeywordsPerSkill={settings?.chatStyleMaxKeywordsPerSkill.value}
+        isLoading={isSettingsLoading}
+      />
 
       <TailoringSections {...tailoringSectionsProps} />
     </div>

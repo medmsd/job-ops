@@ -1,3 +1,4 @@
+import type { TailoringReadiness } from "@client/components/tailoring/rules";
 import type { ApplicationTask, Job } from "@shared/types.js";
 import {
   CalendarClock,
@@ -42,6 +43,7 @@ type JobPageRightSidebarProps = {
   isUploadingPdf: boolean;
   pdfActionsDisabled: boolean;
   pdfRegeneratingReason: string | null;
+  tailoringReadiness: TailoringReadiness;
   pdfViewLabel: string;
   pdfDownloadLabel: string;
   onStartTailoring: () => void;
@@ -76,6 +78,7 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
   isUploadingPdf,
   pdfActionsDisabled,
   pdfRegeneratingReason,
+  tailoringReadiness,
   pdfViewLabel,
   pdfDownloadLabel,
   onStartTailoring,
@@ -100,6 +103,24 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
     <section className="rounded-xl border border-border/50 bg-card/85 p-3">
       <div className="mb-3 flex items-center gap-2 px-1 text-sm font-semibold">
         Actions
+      </div>
+      <div
+        className={`mb-3 rounded-md border px-2 py-1.5 text-[11px] ${
+          tailoringReadiness.isReady
+            ? "border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-300"
+            : "border-amber-500/20 bg-amber-500/[0.05] text-amber-300"
+        }`}
+      >
+        <span className="font-medium">
+          {tailoringReadiness.isReady
+            ? "Application kit ready"
+            : "Application kit incomplete"}
+        </span>
+        {!tailoringReadiness.isReady && (
+          <span className="mt-0.5 block text-muted-foreground">
+            Needs: {tailoringReadiness.missingLabels.join(", ")}
+          </span>
+        )}
       </div>
       <div className="space-y-2">
         {jobLink && (
@@ -241,16 +262,38 @@ export const JobPageRightSidebar: React.FC<JobPageRightSidebarProps> = ({
         </Button>
 
         {isReady && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 w-full justify-start"
-            onClick={onRegeneratePdf}
-            disabled={isBusy || Boolean(pdfRegeneratingReason)}
+          <TooltipWhenDisabled
+            reason={
+              pdfRegeneratingReason ??
+              (tailoringReadiness.canGeneratePdf
+                ? null
+                : `Complete ${tailoringReadiness.missingLabels
+                    .filter((label) =>
+                      [
+                        "Tailored summary",
+                        "Tailored headline",
+                        "Tailored skills",
+                      ].includes(label),
+                    )
+                    .join(", ")} before regenerating.`)
+            }
+            className="w-full"
           >
-            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-            Regenerate PDF
-          </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 w-full justify-start"
+              onClick={onRegeneratePdf}
+              disabled={
+                isBusy ||
+                Boolean(pdfRegeneratingReason) ||
+                !tailoringReadiness.canGeneratePdf
+              }
+            >
+              <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+              Regenerate PDF
+            </Button>
+          </TooltipWhenDisabled>
         )}
 
         {(isReady || isDiscovered) && (

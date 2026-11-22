@@ -29,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { ProjectSelector } from "../discovered-panel/ProjectSelector";
 import type { EditableSkillGroup } from "../tailoring-utils";
+import { parseTailoredSkills } from "../tailoring-utils";
 import {
   applySummaryTextareaHeight,
   formatTextCount,
@@ -36,6 +37,24 @@ import {
   TAILOR_TEXTAREA_MIN_HEIGHT_PX,
   type TextCountMode,
 } from "./summary-text-metrics";
+
+export type TailoringReviewKey = "summary" | "headline" | "skills";
+
+export interface TailoringBaseline {
+  summary: string;
+  headline: string;
+  skillsJson: string;
+}
+
+export interface TailoringSuggestion {
+  current: string;
+  suggested: string;
+  label: string;
+}
+
+export type TailoringSuggestions = Partial<
+  Record<TailoringReviewKey, TailoringSuggestion>
+>;
 
 interface TailoringSectionsProps {
   catalog: ResumeProjectCatalogItem[];
@@ -55,6 +74,11 @@ interface TailoringSectionsProps {
   isGeneratingProjects: boolean;
   openSkillGroupId: string;
   disableInputs: boolean;
+  suggestions: TailoringSuggestions;
+  originalBaseline: TailoringBaseline;
+  onAcceptSuggestion: (key: TailoringReviewKey) => void;
+  onKeepCurrentSuggestion: (key: TailoringReviewKey) => void;
+  onUndoOriginalSuggestion: (key: TailoringReviewKey) => void;
   onGenerateSummary: () => void;
   onGenerateHeadline: () => void;
   onGenerateSkills: () => void;
@@ -169,6 +193,28 @@ const skillGroupHasKeywords = (keywordsText: string) =>
 
 const skillGroupNeedsReview = (group: EditableSkillGroup) =>
   !textHasValue(group.name) || !skillGroupHasKeywords(group.keywordsText);
+
+const excerpt = (value: string, maxLength = 240) => {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) return "Empty";
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
+    : normalized;
+};
+
+const formatReviewValue = (key: TailoringReviewKey, value: string) => {
+  if (key !== "skills") return excerpt(value);
+  const groups = parseTailoredSkills(value);
+  if (groups.length === 0) return "Empty";
+  return excerpt(
+    groups
+      .map(
+        (group) =>
+          `${group.name || "Untitled group"}: ${group.keywords.join(", ")}`,
+      )
+      .join(" | "),
+  );
+};
 
 export function getNoSelectedProjectsInfo(args: {
   catalog: ResumeProjectCatalogItem[];
@@ -320,6 +366,11 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
   isGeneratingProjects,
   openSkillGroupId,
   disableInputs,
+  suggestions,
+  originalBaseline,
+  onAcceptSuggestion,
+  onKeepCurrentSuggestion,
+  onUndoOriginalSuggestion,
   onGenerateSummary,
   onGenerateHeadline,
   onGenerateSkills,
@@ -361,6 +412,9 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
   const generateTooltip = "Generate";
   const undoTooltip = "Undo to template";
   const redoTooltip = "Redo to AI draft";
+  const suggestionKeys = (
+    ["summary", "headline", "skills"] as const
+  ).filter((key) => Boolean(suggestions[key]));
   const skillsState: SectionState =
     skillsDraft.length === 0
       ? "none"
@@ -618,6 +672,92 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
         </AccordionContent>
       </AccordionItem>
 
+      {suggestionKeys.length > 0 && (
+        <AccordionItem value="review" className={sectionClass}>
+          <AccordionTrigger
+            className={triggerClass}
+            aria-label="Review AI suggestions"
+          >
+            <SectionTriggerLabel
+              title="Review AI suggestions"
+              state="review"
+              count={suggestionKeys.length}
+            />
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 px-3 pb-3 pt-3">
+            <p className="text-[11px] leading-5 text-muted-foreground">
+              Manual edits are kept. AI wording is shown here until you accept
+              it. Suggestions use the job description and your approved profile
+              facts; verify every claim before accepting.
+            </p>
+            {suggestionKeys.map((key) => {
+              const suggestion = suggestions[key];
+              if (!suggestion) return null;
+              return (
+                <div
+                  key={key}
+                  className="space-y-2 rounded-md border border-amber-500/20 bg-amber-500/[0.04] p-3"
+                >
+                  <div className="text-xs font-semibold text-foreground/90">
+                    {suggestion.label}
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Your version
+                    </div>
+                    <p className="text-[11px] leading-5 text-foreground/80">
+                      {formatReviewValue(key, suggestion.current)}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-300/80">
+                      AI suggestion
+                    </div>
+                    <p className="text-[11px] leading-5 text-foreground/80">
+                      {formatReviewValue(key, suggestion.suggested)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={actionButtonClass}
+                      onClick={() => onAcceptSuggestion(key)}
+                      disabled={disableInputs}
+                      aria-label={`Use AI draft for ${suggestion.label}`}
+                    >
+                      Use AI draft
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className={actionButtonClass}
+                      onClick={() => onKeepCurrentSuggestion(key)}
+                      disabled={disableInputs}
+                      aria-label={`Keep mine for ${suggestion.label}`}
+                    >
+                      Keep mine
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className={actionButtonClass}
+                      onClick={() => onUndoOriginalSuggestion(key)}
+                      disabled={disableInputs}
+                      aria-label={`Undo to original for ${suggestion.label}`}
+                    >
+                      Undo to original
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </AccordionContent>
+        </AccordionItem>
+      )}
+
       <AccordionItem value="skills" className={sectionClass}>
         <AccordionTrigger className={triggerClass} aria-label="Tailored Skills">
           <SectionTriggerLabel
@@ -786,6 +926,42 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
               ))}
             </Accordion>
           )}
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="baseline" className={sectionClass}>
+        <AccordionTrigger className={triggerClass} aria-label="Resume Studio baseline">
+          <SectionTriggerLabel title="Resume Studio baseline" state="source" />
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 px-3 pb-3 pt-3">
+          <p className="text-[11px] leading-5 text-muted-foreground">
+            Compared with the Resume Studio baseline. This is for review only;
+            edit fields above.
+          </p>
+          <div className="space-y-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Original summary
+            </div>
+            <p className="text-[11px] leading-5 text-foreground/80">
+              {formatReviewValue("summary", originalBaseline.summary)}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Original headline
+            </div>
+            <p className="text-[11px] leading-5 text-foreground/80">
+              {formatReviewValue("headline", originalBaseline.headline)}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Original skill categories
+            </div>
+            <p className="text-[11px] leading-5 text-foreground/80">
+              {formatReviewValue("skills", originalBaseline.skillsJson)}
+            </p>
+          </div>
         </AccordionContent>
       </AccordionItem>
 

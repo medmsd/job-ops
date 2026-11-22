@@ -1,5 +1,7 @@
 import { ComposeEmailModal } from "@client/components/ComposeEmailModal";
 import { CoverLetterModal } from "@client/components/CoverLetterModal";
+import type { TailoringReadiness } from "@client/components/tailoring/rules";
+import { getTailoringReadiness } from "@client/components/tailoring/rules";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import {
@@ -157,9 +159,10 @@ export const JobPage: React.FC = () => {
     null,
   );
   const [catalog, setCatalog] = React.useState<ResumeProjectCatalogItem[]>([]);
+  const [isCatalogLoading, setIsCatalogLoading] = React.useState(true);
   const pendingEventRef = React.useRef<StageEvent | null>(null);
   const uploadPdfInputRef = React.useRef<HTMLInputElement | null>(null);
-  const { settings } = useSettings();
+  const { settings, isLoading: isSettingsLoading } = useSettings();
   const openEditDetails = React.useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
   }, []);
@@ -244,6 +247,30 @@ export const JobPage: React.FC = () => {
       ),
     [catalog, effectiveSelectedProjectIds],
   );
+  const tailoringReadiness = React.useMemo<TailoringReadiness>(
+    () =>
+      getTailoringReadiness({
+        summary: job?.tailoredSummary,
+        headline: job?.tailoredHeadline,
+        skillsJson: job?.tailoredSkills,
+        jobDescription: job?.jobDescription,
+        selectedProjectIds: effectiveSelectedProjectIds.join(","),
+        pdfFreshness: job?.pdfFreshness,
+        pdfRegenerating: job?.pdfRegenerating,
+        projectsAreLoading: isCatalogLoading || isSettingsLoading,
+      }),
+    [
+      job?.tailoredSummary,
+      job?.tailoredHeadline,
+      job?.tailoredSkills,
+      job?.jobDescription,
+      job?.pdfFreshness,
+      job?.pdfRegenerating,
+      effectiveSelectedProjectIds,
+      isCatalogLoading,
+      isSettingsLoading,
+    ],
+  );
   const sourceLabel = job
     ? (sourceLabels[job.source] ?? formatJobSourceLabel(job.source))
     : "";
@@ -281,6 +308,9 @@ export const JobPage: React.FC = () => {
         if (!isCancelled) {
           setCatalog([]);
         }
+      })
+      .finally(() => {
+        if (!isCancelled) setIsCatalogLoading(false);
       });
 
     return () => {
@@ -929,6 +959,7 @@ export const JobPage: React.FC = () => {
               isUploadingPdf={isUploadingPdf}
               pdfActionsDisabled={pdfActionsDisabled}
               pdfRegeneratingReason={pdfRegeneratingReason}
+              tailoringReadiness={tailoringReadiness}
               onApply={() => setIsComposeEmailOpen(true)}
               applyDisabledReason={
                 !job.pdfPath

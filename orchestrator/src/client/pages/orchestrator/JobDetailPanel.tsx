@@ -13,6 +13,7 @@ import { OpenJobListingButton } from "@client/components/OpenJobListingButton";
 import { useJobPdfViewer } from "@client/components/pdf/JobPdfViewerProvider";
 import { Tip } from "@client/components/Tip";
 import { TooltipWhenDisabled } from "@client/components/TooltipWhenDisabled";
+import { getTailoringReadiness } from "@client/components/tailoring/rules";
 import { TailoringWorkspace } from "@client/components/tailoring/TailoringWorkspace";
 import {
   useMarkAsAppliedMutation,
@@ -339,15 +340,26 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         .filter(Boolean),
     [catalog, effectiveSelectedProjectIds],
   );
-  const hasTailoredSummary = Boolean(selectedJob?.tailoredSummary);
-  const hasTailoredSkills = Boolean(selectedJob?.tailoredSkills);
-  const hasResumePdf = Boolean(selectedJob?.pdfPath);
   const hasJobListing = Boolean(jobLink && jobLink !== "#");
   const hasOpenedJobListing = selectedJob
     ? openedListingJobIds.has(selectedJob.id)
     : false;
-  const applicationKitReady =
-    hasTailoredSummary && hasTailoredSkills && hasResumePdf;
+  const tailoringReadiness = useMemo(
+    () =>
+      getTailoringReadiness({
+        summary: selectedJob?.tailoredSummary,
+        headline: selectedJob?.tailoredHeadline,
+        skillsJson: selectedJob?.tailoredSkills,
+        jobDescription: selectedJob?.jobDescription,
+        selectedProjectIds: effectiveSelectedProjectIds.join(","),
+        pdfFreshness: selectedJob?.pdfFreshness,
+        pdfRegenerating: selectedJob?.pdfRegenerating,
+      }),
+    [selectedJob, effectiveSelectedProjectIds],
+  );
+  const applicationKitReady = tailoringReadiness.isReady;
+  const readinessCheck = (id: (typeof tailoringReadiness.checks)[number]["id"]) =>
+    tailoringReadiness.checks.find((check) => check.id === id);
   const brief = parseJobBrief(selectedJob?.jobBrief || null);
 
   const loadCatalog = useCallback(async () => {
@@ -916,8 +928,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground/75">
                         {applicationKitReady
-                          ? "Tailored summary, skills, and PDF are ready. Use Apply now to review the cover letter and send the CV."
-                          : "Check the application kit before submitting this role."}
+                          ? "All checklist items are ready. Use Apply now to review the cover letter and send the CV."
+                          : `Needs review: ${tailoringReadiness.missingLabels.join(", ")}.`}
                       </p>
                     </div>
                   </div>
@@ -1012,23 +1024,33 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
               <div className="overflow-hidden rounded-md border border-border/45 bg-muted/5">
                 <KitStatus
                   icon={<FileText className="h-4 w-4" />}
+                  label="Job description"
+                  ready={readinessCheck("jobDescription")?.ready ?? false}
+                />
+                <KitStatus
+                  icon={<FileText className="h-4 w-4" />}
                   label="Tailored summary"
-                  ready={hasTailoredSummary}
+                  ready={readinessCheck("summary")?.ready ?? false}
+                />
+                <KitStatus
+                  icon={<FileText className="h-4 w-4" />}
+                  label="Tailored headline"
+                  ready={readinessCheck("headline")?.ready ?? false}
                 />
                 <KitStatus
                   icon={<Star className="h-4 w-4" />}
                   label="Tailored skills"
-                  ready={hasTailoredSkills}
+                  ready={readinessCheck("skills")?.ready ?? false}
                 />
                 <KitStatus
                   icon={<FileText className="h-4 w-4" />}
                   label="Resume PDF"
-                  ready={hasResumePdf}
+                  ready={readinessCheck("pdf")?.ready ?? false}
                 />
                 <KitStatus
                   icon={<FolderKanban className="h-4 w-4" />}
                   label="Selected projects"
-                  ready={effectiveSelectedProjectIds.length > 0}
+                  ready={readinessCheck("projects")?.ready ?? false}
                   readyLabel={`${effectiveSelectedProjectIds.length} included`}
                 />
                 <KitStatus

@@ -1,3 +1,4 @@
+import { getTailoringReadiness } from "@client/components/tailoring/rules";
 import { createJob } from "@shared/testing/factories.js";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
@@ -42,6 +43,16 @@ function renderRightSidebar(
     ...overrides,
   });
 
+  const readiness = getTailoringReadiness({
+    summary: job.tailoredSummary,
+    headline: job.tailoredHeadline,
+    skillsJson: job.tailoredSkills,
+    jobDescription: job.jobDescription,
+    selectedProjectIds: job.selectedProjectIds,
+    pdfFreshness: job.pdfFreshness,
+    pdfRegenerating: job.pdfRegenerating,
+  });
+
   return render(
     <JobPageRightSidebar
       job={job}
@@ -56,6 +67,7 @@ function renderRightSidebar(
       isUploadingPdf={false}
       pdfActionsDisabled={false}
       pdfRegeneratingReason={null}
+      tailoringReadiness={readiness}
       pdfViewLabel="View old PDF"
       pdfDownloadLabel="Download old PDF"
       onStartTailoring={noop}
@@ -119,6 +131,22 @@ describe("JobPageRightSidebar actions", () => {
       screen.getAllByRole("button", { name: /upload pdf/i }).length,
     ).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /download pdf/i })).toBeNull();
+  });
+
+  it("reports a stale PDF in the shared application-kit checklist", () => {
+    renderRightSidebar({
+      tailoredSummary: "Tailored summary",
+      tailoredHeadline: "Tailored headline",
+      tailoredSkills: JSON.stringify([
+        { name: "Backend", keywords: ["Java"] },
+      ]),
+      jobDescription: "Build APIs",
+      selectedProjectIds: "project-a",
+      pdfFreshness: "stale",
+    });
+
+    expect(screen.getByText(/application kit incomplete/i)).toBeInTheDocument();
+    expect(screen.getByText(/needs: resume pdf/i)).toBeInTheDocument();
   });
 
   it("offers Apply now above Mark Applied for non-applied jobs with a PDF", () => {

@@ -172,6 +172,46 @@ Open the **search links** row in the Ready summary to reveal the generated links
 1. Open the sidebar menu.
 2. In the footer section under `Version vX.Y.Z`, click **Documentation**, which opens the locally hosted docs in a new tab.
 
+### Tailoring review workflow
+
+Open a job's **Tailoring** tab to review its job-specific CV fields.
+
+What it is:
+
+- **Summary**, **Headline**, and **Tailored Skills** are editable fields for this job.
+- **Generate all** uses AI only when you explicitly click it; opening a job or tailoring panel never calls AI.
+- AI receives structured job facts (title, employer, location, parsed job brief, suitability reason, degree/disciplines, and job notes) plus your current approved tailoring values. This keeps wording grounded in the role and your existing evidence.
+- The effective writing rules from **Settings → Writing Style & Language** appear in the panel with an **Edit in Settings** link.
+
+Why it exists:
+
+- Manual edits stay authoritative. Regeneration keeps edited fields unchanged and shows the AI wording as a suggestion instead of silently replacing your text.
+- The **Review AI suggestions** panel shows your version beside the AI version, with **Use AI draft**, **Keep mine**, and **Undo to original** actions.
+- The **Resume Studio baseline** panel shows the original summary, headline, and skill categories for comparison. It is read-only.
+- One readiness checklist is shared by the tailoring workspace, the application kit, and the job page. It checks job description, summary, headline, skills, selected projects, and PDF freshness.
+
+How to use it:
+
+1. Open the job and select **Tailoring**.
+2. Edit fields directly, or click **Generate** on a section / **Generate all**.
+3. If a field was manually edited, open **Review AI suggestions**.
+   1. Choose **Use AI draft** to accept the suggested wording.
+   2. Choose **Keep mine** to dismiss the suggestion without changing the field.
+   3. Choose **Undo to original** to restore the Resume Studio value.
+4. Check the readiness banner before selecting **Generate PDF**.
+5. Use **Preview PDF** to inspect the rendered CV.
+
+Common problems:
+
+- **AI wording did not replace my edit.** This is intentional. Open **Review AI suggestions** and choose **Use AI draft** if you want it.
+- **The app says the PDF is stale.** Regenerate the PDF after changing the JD, tailoring fields, or selected projects.
+- **Writing rules look different than expected.** Open **Settings → Writing Style & Language** from the rules strip; the panel shows effective values, not just overrides.
+
+Related pages:
+
+- [Design Resume](/docs/next/features/design-resume)
+- [Ghostwriter](/docs/next/features/ghostwriter)
+
 ### Generating PDFs
 
 PDF generation uses:
