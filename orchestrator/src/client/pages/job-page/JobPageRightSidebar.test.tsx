@@ -1,5 +1,6 @@
 import { createJob } from "@shared/testing/factories.js";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type React from "react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { JobPageRightSidebar } from "./JobPageRightSidebar";
@@ -30,7 +31,10 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
 
 const noop = vi.fn();
 
-function renderRightSidebar(overrides: Parameters<typeof createJob>[0] = {}) {
+function renderRightSidebar(
+  overrides: Parameters<typeof createJob>[0] = {},
+  props: Partial<React.ComponentProps<typeof JobPageRightSidebar>> = {},
+) {
   const job = createJob({
     status: "ready",
     pdfPath: "data/pdfs/resume_job-1.pdf",
@@ -55,6 +59,10 @@ function renderRightSidebar(overrides: Parameters<typeof createJob>[0] = {}) {
       pdfViewLabel="View old PDF"
       pdfDownloadLabel="Download old PDF"
       onStartTailoring={noop}
+      onApply={noop}
+      applyDisabledReason={
+        job.pdfPath ? null : "Generate a tailored PDF first."
+      }
       onMarkApplied={noop}
       onOpenLogEvent={noop}
       onEditTailoring={noop}
@@ -69,6 +77,7 @@ function renderRightSidebar(overrides: Parameters<typeof createJob>[0] = {}) {
       onCopyJobInfo={noop}
       onRescore={noop}
       onCheckSponsor={noop}
+      {...props}
     />,
   );
 }
@@ -110,5 +119,37 @@ describe("JobPageRightSidebar actions", () => {
       screen.getAllByRole("button", { name: /upload pdf/i }).length,
     ).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /download pdf/i })).toBeNull();
+  });
+
+  it("offers Apply now above Mark Applied for non-applied jobs with a PDF", () => {
+    const onApply = vi.fn();
+    renderRightSidebar({}, { onApply });
+
+    const apply = screen.getByRole("button", { name: /apply now/i });
+    const markApplied = screen.getByRole("button", { name: /mark applied/i });
+    expect(apply).toBeEnabled();
+    expect(
+      apply.compareDocumentPosition(markApplied) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(apply);
+    expect(onApply).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides Apply now once the job is applied", () => {
+    renderRightSidebar({ status: "applied" });
+
+    expect(screen.queryByRole("button", { name: /apply now/i })).toBeNull();
+  });
+
+  it("disables Apply now and explains when no tailored PDF exists", () => {
+    renderRightSidebar({ pdfPath: null, pdfFreshness: "missing" });
+
+    const apply = screen.getByRole("button", { name: /apply now/i });
+    expect(apply).toBeDisabled();
+    expect(
+      screen.getByText(/generate a tailored pdf first/i),
+    ).toBeInTheDocument();
   });
 });
