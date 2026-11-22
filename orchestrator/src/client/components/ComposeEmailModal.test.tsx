@@ -114,6 +114,37 @@ describe("ComposeEmailModal", () => {
     ).toBeInTheDocument();
   });
 
+  it("warns when the recipient must be entered manually and sends the typed address", async () => {
+    mocks.preview.mockResolvedValueOnce({
+      ...preview,
+      messageId: null,
+      to: "",
+      recipientSource: "manual",
+    });
+
+    render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("To")).toHaveValue("");
+    });
+    expect(
+      screen.getByText(/no recruiter address was found/i),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("To"), {
+      target: { value: "manual.recruiter@example.com" },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /send email/i }));
+
+    await waitFor(() => {
+      expect(mocks.send).toHaveBeenCalledWith(
+        "job-1",
+        expect.objectContaining({ to: "manual.recruiter@example.com" }),
+      );
+    });
+  });
+
   it("sends edited recipient, subject, and body", async () => {
     render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
 

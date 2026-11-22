@@ -194,6 +194,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                   recruiter email. Verify it before sending.
                 </p>
               )}
+              {preview.recipientSource === "manual" && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No recruiter address was found in your Tracking Inbox or this
+                  job's details. Enter one above before sending.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Single recipient only. No BCC is added.
               </p>

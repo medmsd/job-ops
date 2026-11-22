@@ -108,7 +108,7 @@ Confidence interpretation:
 
 On a job with a generated tailored PDF, open the **Apply** tab and click **Apply now** (or use **Email recruiter** in the **More actions** menu). JobOps generates a cover letter from the job and tailored CV, then shows a preview you can edit:
 
-- **To**: defaults to the `From` address of a matched Tracking Inbox email. If no email is matched, JobOps uses the first valid address from the job's `emails` field and then its job description. The preview labels addresses taken from job details so you can verify them. Editable, but only a single plain email address is accepted. No BCC is added.
+- **To**: defaults to the `From` address of a matched Tracking Inbox email. If no email is matched, JobOps uses the first valid address from the job's `emails` field and then its job description (including `mailto:` links, HTML entities such as `&#64;`, and `(at)` / `[dot]` obfuscation). If none is found, the field opens empty for you to type the address. The preview labels addresses taken from job details or entered manually so you can verify them. Editable, but only a single plain email address is accepted. No BCC is added.
 - **Cover letter**: editable. Changing it updates the **Message** below automatically.
 - **Subject** and **Message**: editable; the generated cover letter plus a short sign-off is the initial message and is sent as plain text.
 - **Preview PDF**: opens the tailored PDF in a popup dialog on the current page.
@@ -116,7 +116,7 @@ On a job with a generated tailored PDF, open the **Apply** tab and click **Apply
 
 Nothing is sent when the preview is generated. The send button stays disabled until you check the confirmation box and click **Send email**. Preview tokens expire after 10 minutes by default, are single-use, and are scoped to the signed-in user and workspace. Sending requires Microsoft Graph with delegated `Mail.Send` granted and consented; see [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup).
 
-For a job whose details could not be fetched, add the recruiter address to the job description before opening **Apply now**. JobOps pre-fills it, but job-post text is untrusted: always verify the **To** field before confirming. If no address is found in the Tracking Inbox, the job's `emails` field, or the description, the preview explains where to add one.
+For a job whose details could not be fetched, add the recruiter address to the job description before opening **Apply now**. JobOps pre-fills it, but job-post text is untrusted: always verify the **To** field before confirming. If no address is found in the Tracking Inbox, the job's `emails` field, or the description, the preview opens with an empty **To** field and a warning: type the recruiter's address yourself, then check the confirmation box and click **Send email**. The send button rejects blank, multi-recipient, or malformed addresses.
 
 ```bash
 # Preview (no side effects)
@@ -185,7 +185,7 @@ curl -X PUT "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
 - Wrong matches: expected in lower-confidence buckets; use manual review.
 - "Reconnect Microsoft Graph to grant Mail.Send permission": `Mail.Send` was added after the Graph connection was authorized; disconnect, reconnect, and approve the permission.
 - "Apply now" / "Email recruiter" disabled: tailor and generate the PDF for that job first.
-- "No recruitment email is linked... no address was found in its details": add the recruiter address to the job description or link a tracked email in the Tracking Inbox.
+- Empty **To** field with "No recruiter address was found": type the address manually in the preview, or add it to the job description / link a tracked email for future prefill.
 - Wrong recipient pre-filled from job details: edit the **To** field in the preview; only your explicit confirmation sends the email.
 - Preview token expired or already used: open **Apply now** again to generate a fresh preview.
 

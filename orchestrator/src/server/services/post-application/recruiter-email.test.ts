@@ -59,6 +59,7 @@ vi.mock("@server/services/post-application/ingestion/graph-api", () => ({
 import {
   buildCoverLetterMessages,
   generateJobCoverLetter,
+  jobEmailCandidates,
   normalizeRecipientAddress,
   previewRecruiterEmail,
   sendRecruiterEmail,
@@ -275,19 +276,75 @@ describe("recruiter email service", () => {
     );
   });
 
-  it("rejects preview with an actionable error when no recipient can be resolved", async () => {
+  it("extracts bare addresses from mailto links, HTML entities, and obfuscated text", () => {
+    expect(
+      jobEmailCandidates({
+        emails: '<a href="mailto:sam&#64;acme.com">sam(at)acme[dot]com</a>',
+        jobDescription: "Contact jobs@acme.com",
+      }),
+    ).toEqual(["sam@acme.com", "jobs@acme.com"]);
+  });
+
+  it("reduces a display-name contact to a single bare address", () => {
+    expect(
+      jobEmailCandidates({ emails: "Samantha <sgoncalves@xccelerated.io>" }),
+    ).toEqual(["sgoncalves@xccelerated.io"]);
+  });
+
+  it("opens a manual-recipient preview when no tracked or job address exists", async () => {
     mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
     mocks.getJobById.mockResolvedValueOnce(
       jobWith({ emails: null, jobDescription: "No contact details." }),
     );
 
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
+    expect(preview).toMatchObject({
+      jobId: "job-1",
+      messageId: null,
+      to: "",
+      recipientSource: "manual",
+    });
+  });
+
+  it("sends to a manually entered address for a manual preview", async () => {
+    mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({ emails: null, jobDescription: "No contact details." }),
+    );
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+    await sendRecruiterEmail({
+      jobId: "job-1",
+      request: {
+        previewToken: preview.previewToken,
+        to: " samantha@acme.com ",
+      },
+    });
+
+    expect(mocks.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "samantha@acme.com" }),
+    );
+  });
+
+  it("rejects sending a manual preview without a recipient address", async () => {
+    mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({ emails: null, jobDescription: "No contact details." }),
+    );
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
     await expect(
-      previewRecruiterEmail({ jobId: "job-1" }),
+      sendRecruiterEmail({
+        jobId: "job-1",
+        request: { previewToken: preview.previewToken, to: "" },
+      }),
     ).rejects.toMatchObject({
       status: 422,
       code: "UNPROCESSABLE_ENTITY",
-      message: expect.stringContaining("Tracking Inbox") as string,
     } satisfies Partial<AppError>);
+    expect(mocks.sendMail).not.toHaveBeenCalled();
   });
 
   it("generates a downloadable cover letter without a tracked email or PDF", async () => {

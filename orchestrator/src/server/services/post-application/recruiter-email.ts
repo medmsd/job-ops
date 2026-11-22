@@ -92,12 +92,43 @@ export function recipientDomain(address: string): string {
 const EMAIL_CANDIDATE_PATTERN =
   /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
+function decodedEntityCharacter(codePoint: number): string {
+  if (!Number.isFinite(codePoint) || codePoint < 32 || codePoint > 126) {
+    return " ";
+  }
+  return String.fromCharCode(codePoint);
+}
+
+/**
+ * Normalize common listing formats before matching: HTML entities (including
+ * numeric `&#64;`), `mailto:` links, and bracketed `(at)` / `[dot]` obfuscation.
+ * Unknown entities become whitespace so unrelated markup cannot join words
+ * into a false address.
+ */
+function decodeEmailText(raw: string): string {
+  return raw
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) =>
+      decodedEntityCharacter(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);?/g, (_, decimal: string) =>
+      decodedEntityCharacter(Number.parseInt(decimal, 10)),
+    )
+    .replace(/&commat;/gi, "@")
+    .replace(/&(?:dot|period);/gi, ".")
+    .replace(/&\w+;/g, " ")
+    .replace(
+      /([A-Za-z0-9._%+-])\s*(?:\(|\[|\{)(at|dot)(?:\)|\]|\})\s*([A-Za-z0-9.-])/gi,
+      (_, left: string, token: string, right: string) =>
+        `${left}${token.toLowerCase() === "at" ? "@" : "."}${right}`,
+    );
+}
+
 /**
  * Recover a recruiter address from the job itself when the Tracking Inbox has
  * no matched message. `emails` may be comma separated; a manually edited
- * description may contain the address in prose. Only bare, validated addresses
- * are accepted, and the preview remains editable so an ambiguous match can be
- * corrected before the explicit send confirmation.
+ * description may contain the address in prose, HTML, or an obfuscated form.
+ * Only bare, validated addresses are accepted, and the preview remains editable
+ * so an ambiguous match can be corrected before the explicit send confirmation.
  */
 export function jobEmailCandidates(job: {
   emails?: string | null;
@@ -106,7 +137,8 @@ export function jobEmailCandidates(job: {
   const candidates: string[] = [];
   for (const raw of [job.emails, job.jobDescription]) {
     if (!raw) continue;
-    for (const match of raw.match(EMAIL_CANDIDATE_PATTERN) ?? []) {
+    for (const match of decodeEmailText(raw).match(EMAIL_CANDIDATE_PATTERN) ??
+      []) {
       const address = normalizeRecipientAddress(match);
       if (address && !candidates.includes(address)) candidates.push(address);
     }
@@ -380,32 +412,29 @@ export async function previewRecruiterEmail(input: {
 
   let messageId: string | null = null;
   let accountKey = GRAPH_ACCOUNT_KEY;
-  let recipientSource: "tracked" | "job" = "tracked";
+  let recipientSource: "tracked" | "job" | "manual" = "tracked";
   let sourceSubject = "";
-  let to: string | null = null;
+  let to = "";
 
   if (message) {
-    to = normalizeRecipientAddress(message.fromAddress);
-    if (!to) {
+    const trackedAddress = normalizeRecipientAddress(message.fromAddress);
+    if (!trackedAddress) {
       throw unprocessableEntity(
         "The matched email has no valid recruiter reply address.",
       );
     }
+    to = trackedAddress;
     messageId = message.id;
     accountKey =
       message.provider === "graph" ? message.accountKey : GRAPH_ACCOUNT_KEY;
     sourceSubject = message.subject ?? "";
   } else {
-    // No tracked message: fall back to the job's own contact data. The user
-    // still reviews and edits the recipient before any explicit confirmation.
+    // No tracked message: fall back to the job's own contact data. If the job
+    // has none either, leave the recipient blank for manual entry in the
+    // preview. Nothing is sent until the user types an address and confirms.
     recipientSource = "job";
-    to = jobEmailCandidates(job)[0] ?? null;
-  }
-
-  if (!to) {
-    throw unprocessableEntity(
-      "No recruitment email is linked to this job and no address was found in its details. Link one in the Tracking Inbox or add it to the job description first.",
-    );
+    to = jobEmailCandidates(job)[0] ?? "";
+    if (!to) recipientSource = "manual";
   }
 
   const pdfPath = getPdfPath(job.id);
