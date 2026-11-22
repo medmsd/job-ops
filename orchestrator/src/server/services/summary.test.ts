@@ -33,7 +33,7 @@ vi.mock("./writing-style", async (importOriginal) => {
 });
 
 import { getSetting } from "../repositories/settings";
-import { generateTailoring } from "./summary";
+import { generateSummary, generateTailoring } from "./summary";
 import { getWritingStyle } from "./writing-style";
 
 describe("generateTailoring", () => {
@@ -366,5 +366,94 @@ describe("generateTailoring", () => {
     expect(prompt).toContain("Maximum 8 keywords per category");
     // "keep under 90 words" is stripped from constraints because summaryMaxWords (35) takes precedence
     expect(prompt).not.toContain("keep under 90 words");
+  });
+
+  it("passes structured job facts and notes into the prompt", async () => {
+    await generateTailoring(
+      "Build APIs",
+      {
+        basics: { name: "Test User", label: "Engineer" },
+      },
+      {
+        title: "Senior Backend Engineer",
+        employer: "Example Co",
+        location: "Tunisia / Remote",
+        degreeRequired: "BSc Computer Science",
+        disciplines: "Software Engineering",
+        jobBrief: "{\"role_summary\":\"Build APIs\"}",
+        suitabilityReason: "Strong backend match",
+        notes: ["<b>Referral</b>: talk to Sam", "On-site twice monthly"],
+      },
+    );
+
+    const prompt = callJsonMock.mock.calls.at(-1)?.[0]?.messages?.[0]?.content;
+    expect(prompt).toContain("STRUCTURED JOB FACTS:");
+    expect(prompt).toContain("Senior Backend Engineer");
+    expect(prompt).toContain("Example Co");
+    expect(prompt).toContain("Tunisia / Remote");
+    expect(prompt).toContain("BSc Computer Science");
+    expect(prompt).toContain("Software Engineering");
+    expect(prompt).toContain("Build APIs");
+    expect(prompt).toContain("Strong backend match");
+    expect(prompt).toContain("Referral: talk to Sam");
+    expect(prompt).not.toContain("<b>");
+  });
+
+  it("passes approved tailoring context into the prompt", async () => {
+    await generateTailoring(
+      "Build APIs",
+      {
+        basics: { name: "Test User", label: "Engineer" },
+      },
+      {
+        approved: {
+          summary: "Approved summary",
+          headline: "Approved headline",
+          skills: [
+            {
+              name: "Backend",
+              keywords: ["Java", "Spring Boot"],
+            },
+          ],
+        },
+      },
+    );
+
+    const prompt = callJsonMock.mock.calls.at(-1)?.[0]?.messages?.[0]?.content;
+    expect(prompt).toContain("CURRENT APPROVED TAILORING CONTEXT:");
+    expect(prompt).toContain("Approved summary");
+    expect(prompt).toContain("Approved headline");
+    expect(prompt).toContain("Spring Boot");
+    expect(prompt).toContain("GROUNDING AND APPROVED CONTEXT:");
+  });
+
+  it("truncates long context values and caps the notes list", async () => {
+    const longNote = `note ${"x".repeat(700)}`;
+    await generateTailoring(
+      "Build APIs",
+      {
+        basics: { name: "Test User", label: "Engineer" },
+      },
+      {
+        jobBrief: "A".repeat(2100),
+        suitabilityReason: "B".repeat(900),
+        notes: Array.from({ length: 12 }, (_, index) => `${longNote}-${index}`),
+      },
+    );
+
+    const prompt = callJsonMock.mock.calls.at(-1)?.[0]?.messages?.[0]?.content;
+    expect(prompt).not.toContain("A".repeat(2001));
+    expect(prompt).not.toContain("B".repeat(801));
+    expect(prompt).not.toContain("x".repeat(601));
+    expect(prompt).not.toContain("note xxxxx-11");
+  });
+
+  it("keeps the summary wrapper working with the new context argument", async () => {
+    const result = await generateSummary("Build APIs", {
+      basics: { name: "Test User", label: "Engineer" },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("Tailored summary");
   });
 });

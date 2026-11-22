@@ -3,6 +3,7 @@ import * as jobsRepo from "../repositories/jobs";
 import * as settingsRepo from "../repositories/settings";
 import { getProfile } from "../services/profile";
 import { pickProjectIdsForJob } from "../services/projectSelection";
+import { generateTailoring } from "../services/summary";
 import { summarizeJob } from "./orchestrator";
 
 vi.mock("@infra/logger", () => {
@@ -22,6 +23,7 @@ vi.mock("@infra/product-analytics", () => ({
 
 vi.mock("../repositories/jobs", () => ({
   getJobById: vi.fn(),
+  listJobNotes: vi.fn(),
   updateJob: vi.fn(),
 }));
 
@@ -102,6 +104,15 @@ const profileWithProjects = {
 describe("summarizeJob project selection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(jobsRepo.listJobNotes).mockResolvedValue([]);
+    vi.mocked(generateTailoring).mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Generated summary",
+        headline: "Generated headline",
+        skills: [{ name: "Backend", keywords: ["Java"] }],
+      },
+    });
     vi.mocked(jobsRepo.getJobById).mockResolvedValue({
       id: "job-1",
       jobDescription: "Data acquisition engineer role.",
@@ -178,5 +189,142 @@ describe("summarizeJob project selection", () => {
     expect(jobsRepo.updateJob).toHaveBeenCalledWith("job-1", {
       selectedProjectIds: "mumtaz-urdu",
     });
+  });
+});
+
+describe("summarizeJob tailoring context", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(jobsRepo.listJobNotes).mockResolvedValue([
+      {
+        id: "note-1",
+        jobId: "job-context",
+        title: "Recruiter note",
+        content: "Referral from Sam",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    vi.mocked(jobsRepo.updateJob).mockResolvedValue(undefined as any);
+    vi.mocked(getProfile).mockResolvedValue({} as any);
+    vi.mocked(generateTailoring).mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Generated summary",
+        headline: "Generated headline",
+        skills: [{ name: "Backend", keywords: ["Java"] }],
+      },
+    });
+  });
+
+  it("passes structured job facts, notes, and approved context into tailoring", async () => {
+    vi.mocked(jobsRepo.getJobById).mockResolvedValue({
+      id: "job-context",
+      title: "Senior Backend Engineer",
+      employer: "Example Co",
+      location: "Remote",
+      jobDescription: "Build APIs",
+      jobBrief: "{\"role_summary\":\"Build APIs\"}",
+      suitabilityReason: "Strong match",
+      degreeRequired: "BSc",
+      disciplines: "Computer Science",
+      tailoredSummary: "Approved summary",
+      tailoredHeadline: "Approved headline",
+      tailoredSkills: JSON.stringify([
+        { name: "Backend", keywords: ["Java"] },
+      ]),
+    } as any);
+
+    const result = await summarizeJob("job-context", {
+      force: true,
+      fields: ["summary", "headline", "skills"],
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(generateTailoring).toHaveBeenCalledWith(
+      "Build APIs",
+      {},
+      expect.objectContaining({
+        title: "Senior Backend Engineer",
+        employer: "Example Co",
+        location: "Remote",
+        jobBrief: "{\"role_summary\":\"Build APIs\"}",
+        suitabilityReason: "Strong match",
+        degreeRequired: "BSc",
+        disciplines: "Computer Science",
+        notes: ["Recruiter note: Referral from Sam"],
+        approved: {
+          summary: "Approved summary",
+          headline: "Approved headline",
+          skills: [{ name: "Backend", keywords: ["Java"] }],
+        },
+      }),
+    );
+  });
+
+  it("generates missing skills when summary and headline already exist", async () => {
+    vi.mocked(jobsRepo.getJobById).mockResolvedValue({
+      id: "job-missing-skills",
+      title: "Backend Engineer",
+      employer: "Example Co",
+      jobDescription: "Build APIs",
+      tailoredSummary: "Existing summary",
+      tailoredHeadline: "Existing headline",
+      tailoredSkills: null,
+    } as any);
+
+    await summarizeJob("job-missing-skills", {
+      fields: ["skills"],
+    });
+
+    expect(generateTailoring).toHaveBeenCalledTimes(1);
+    expect(jobsRepo.updateJob).toHaveBeenCalledWith(
+      "job-missing-skills",
+      expect.objectContaining({
+        tailoredSkills: JSON.stringify([
+          { name: "Backend", keywords: ["Java"] },
+        ]),
+      }),
+    );
+  });
+
+  it("does not generate when all tailoring fields are present", async () => {
+    vi.mocked(jobsRepo.getJobById).mockResolvedValue({
+      id: "job-complete",
+      title: "Backend Engineer",
+      employer: "Example Co",
+      jobDescription: "Build APIs",
+      tailoredSummary: "Existing summary",
+      tailoredHeadline: "Existing headline",
+      tailoredSkills: JSON.stringify([
+        { name: "Backend", keywords: ["Java"] },
+      ]),
+    } as any);
+
+    await summarizeJob("job-complete", {
+      fields: ["summary", "headline", "skills"],
+    });
+
+    expect(generateTailoring).not.toHaveBeenCalled();
+  });
+
+  it("tolerates malformed stored skills when building approved context", async () => {
+    vi.mocked(jobsRepo.getJobById).mockResolvedValue({
+      id: "job-bad-skills",
+      title: "Backend Engineer",
+      employer: "Example Co",
+      jobDescription: "Build APIs",
+      tailoredSkills: "{",
+    } as any);
+
+    await summarizeJob("job-bad-skills", { force: true, fields: ["skills"] });
+
+    expect(generateTailoring).toHaveBeenCalledWith(
+      "Build APIs",
+      {},
+      expect.objectContaining({
+        approved: expect.objectContaining({ skills: [] }),
+      }),
+    );
   });
 });

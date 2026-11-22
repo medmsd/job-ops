@@ -29,11 +29,37 @@ export interface TailoredData {
   skills: Array<{ name: string; keywords: string[] }>;
 }
 
+export interface TailoringApprovedContext {
+  summary?: string | null;
+  headline?: string | null;
+  skills?: TailoredData["skills"] | null;
+}
+
+export interface TailoringJobContext {
+  title?: string | null;
+  employer?: string | null;
+  location?: string | null;
+  jobBrief?: string | null;
+  suitabilityReason?: string | null;
+  degreeRequired?: string | null;
+  disciplines?: string | null;
+  notes?: readonly string[] | null;
+  approved?: TailoringApprovedContext | null;
+}
+
 export interface TailoringResult {
   success: boolean;
   data?: TailoredData;
   error?: string;
 }
+
+const TAILORING_CONTEXT_LIMITS = {
+  jobBrief: 2000,
+  suitabilityReason: 800,
+  note: 600,
+  notes: 10,
+  approvedText: 1200,
+} as const;
 
 /** JSON schema for resume tailoring response */
 const TAILORING_SCHEMA: JsonSchemaDefinition = {
@@ -81,6 +107,7 @@ const TAILORING_SCHEMA: JsonSchemaDefinition = {
 export async function generateTailoring(
   jobDescription: string,
   profile: ResumeProfile,
+  context: TailoringJobContext = {},
 ): Promise<TailoringResult> {
   const [model, writingStyle, aiProfile] = await Promise.all([
     resolveLlmModel("tailoring"),
@@ -91,6 +118,7 @@ export async function generateTailoring(
     aiProfile,
     jobDescription,
     writingStyle,
+    context,
   );
 
   const llm = await createConfiguredLlmService("tailoring");
@@ -117,7 +145,11 @@ export async function generateTailoring(
 
   // Basic validation
   if (!summary || !headline || !Array.isArray(skills)) {
-    logger.warn("AI response missing required tailoring fields", result.data);
+    logger.warn("AI response missing required tailoring fields", {
+      hasSummary: Boolean(summary),
+      hasHeadline: Boolean(headline),
+      skillsIsArray: Array.isArray(skills),
+    });
   }
 
   return {
@@ -136,9 +168,10 @@ export async function generateTailoring(
 export async function generateSummary(
   jobDescription: string,
   profile: ResumeProfile,
+  context: TailoringJobContext = {},
 ): Promise<{ success: boolean; summary?: string; error?: string }> {
   // If we just need summary, we can discard the rest (or cache it? but here we just return summary)
-  const result = await generateTailoring(jobDescription, profile);
+  const result = await generateTailoring(jobDescription, profile, context);
   return {
     success: result.success,
     summary: result.data?.summary,
@@ -150,6 +183,7 @@ async function buildTailoringPrompt(
   profile: ResumeProfile,
   jd: string,
   writingStyle: Awaited<ReturnType<typeof getWritingStyle>>,
+  context: TailoringJobContext,
 ): Promise<string> {
   const jobDescription = stripHtmlTags(jd);
   const resolvedLanguage = resolveWritingOutputLanguage({
@@ -194,6 +228,8 @@ async function buildTailoringPrompt(
   return renderPromptTemplate(template, {
     jobDescription,
     profileJson: JSON.stringify(relevantProfile),
+    structuredJobContextJson: JSON.stringify(buildStructuredJobContext(context)),
+    approvedContextJson: JSON.stringify(buildApprovedContext(context.approved)),
     outputLanguage,
     tone: writingStyle.tone,
     formality: writingStyle.formality,
@@ -212,6 +248,69 @@ async function buildTailoringPrompt(
       ? `- Avoid these words or phrases: ${writingStyle.doNotUse}`
       : "",
   });
+}
+
+function cleanContextText(
+  value: string | null | undefined,
+  maxLength: number,
+): string | undefined {
+  if (!value) return undefined;
+  const cleaned = stripHtmlTags(value)
+    .replace(/\s+/g, " ")
+    .replace(/\s+([:,;.!?])/g, "$1")
+    .trim();
+  if (!cleaned) return undefined;
+  return cleaned.length > maxLength
+    ? `${cleaned.slice(0, maxLength - 1).trimEnd()}…`
+    : cleaned;
+}
+
+function buildStructuredJobContext(context: TailoringJobContext) {
+  const notes = (context.notes ?? [])
+    .map((note) => cleanContextText(note, TAILORING_CONTEXT_LIMITS.note))
+    .filter((note): note is string => Boolean(note))
+    .slice(0, TAILORING_CONTEXT_LIMITS.notes);
+
+  return {
+    title: cleanContextText(context.title, 300),
+    employer: cleanContextText(context.employer, 300),
+    location: cleanContextText(context.location, 300),
+    jobBrief: cleanContextText(
+      context.jobBrief,
+      TAILORING_CONTEXT_LIMITS.jobBrief,
+    ),
+    suitabilityReason: cleanContextText(
+      context.suitabilityReason,
+      TAILORING_CONTEXT_LIMITS.suitabilityReason,
+    ),
+    degreeRequired: cleanContextText(context.degreeRequired, 300),
+    disciplines: cleanContextText(context.disciplines, 300),
+    notes: notes.length > 0 ? notes : undefined,
+  };
+}
+
+function buildApprovedContext(approved: TailoringApprovedContext | null | undefined) {
+  if (!approved) return {};
+  const skills = (approved.skills ?? [])
+    .map((group) => ({
+      name: cleanContextText(group.name, 200) ?? "",
+      keywords: (group.keywords ?? [])
+        .map((keyword) => cleanContextText(keyword, 200))
+        .filter((keyword): keyword is string => Boolean(keyword)),
+    }))
+    .filter((group) => group.name.length > 0 && group.keywords.length > 0);
+
+  return {
+    summary: cleanContextText(
+      approved.summary,
+      TAILORING_CONTEXT_LIMITS.approvedText,
+    ),
+    headline: cleanContextText(
+      approved.headline,
+      TAILORING_CONTEXT_LIMITS.approvedText,
+    ),
+    skills: skills.length > 0 ? skills : undefined,
+  };
 }
 
 function sanitizeText(text: string): string {

@@ -32,6 +32,8 @@ Writing style formality: {{formality}}.
     placeholders: [
       "jobDescription",
       "profileJson",
+      "structuredJobContextJson",
+      "approvedContextJson",
       "outputLanguage",
       "tone",
       "formality",
@@ -50,6 +52,12 @@ JOB DESCRIPTION (JD):
 MY PROFILE:
 {{profileJson}}
 
+STRUCTURED JOB FACTS:
+{{structuredJobContextJson}}
+
+CURRENT APPROVED TAILORING CONTEXT:
+{{approvedContextJson}}
+
 INSTRUCTIONS:
 
 1. "headline" (String):
@@ -66,10 +74,14 @@ INSTRUCTIONS:
 
 3. "skills" (Array of Objects):
    - Review my existing skills section structure.
-   - Keyword Stuffing: Swap synonyms to match the JD exactly (e.g. "TDD" -> "Unit Testing", "ReactJS" -> "React").
+   - Keyword alignment: prefer exact JD terms only when the profile or approved context supports the underlying skill. Reorder and rephrase supported skills; do not invent tools, years, metrics, levels, or seniority.
    - Keep my original skill levels and categories, just rename/reorder keywords to prioritize JD terms.{{maxKeywordsPerSkillLine}}
    - Return the full "items" array for the skills section, preserving the structure: { "name": "Frontend", "keywords": [...] }.
    - Write user-visible skill text in {{outputLanguage}} when natural, but keep exact JD terms, acronyms, and technology names when that helps ATS matching.
+
+GROUNDING AND APPROVED CONTEXT:
+- Treat "CURRENT APPROVED TAILORING CONTEXT" as user-approved wording. Preserve it unless the structured job facts clearly require a different emphasis.
+- Do not invent years, tools, metrics, responsibilities, levels, or seniority to close gaps between the JD and profile.
 
 WRITING STYLE PREFERENCES:
 - Tone: {{tone}}

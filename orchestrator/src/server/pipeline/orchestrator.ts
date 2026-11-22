@@ -43,7 +43,10 @@ import {
   resolveResumeProjectsSettings,
 } from "../services/resumeProjects";
 import { LlmNotConfiguredError } from "../services/scorer";
-import { generateTailoring } from "../services/summary";
+import {
+  generateTailoring,
+  type TailoringJobContext,
+} from "../services/summary";
 import {
   type PendingChallenge,
   progressHelpers,
@@ -732,6 +735,27 @@ export type ProcessJobOptions = {
 /**
  * Step 1: Generate AI summary and suggest projects.
  */
+function parseApprovedTailoringSkills(raw: string | null | undefined) {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((group) => {
+      if (!group || typeof group !== "object") return [];
+      const record = group as { name?: unknown; keywords?: unknown };
+      if (typeof record.name !== "string" || !Array.isArray(record.keywords)) {
+        return [];
+      }
+      const keywords = record.keywords.filter(
+        (keyword): keyword is string => typeof keyword === "string",
+      );
+      return keywords.length > 0 ? [{ name: record.name, keywords }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function summarizeJob(
   jobId: string,
   options?: ProcessJobOptions,
@@ -785,16 +809,38 @@ export async function summarizeJob(
         shouldUpdateAllTailoring || requestedFields.includes("projects");
       const shouldGenerateTailoring =
         shouldUpdateSummary || shouldUpdateHeadline || shouldUpdateSkills;
+      const hasAllTailoringFields = Boolean(
+        tailoredSummary && tailoredHeadline && tailoredSkills?.trim(),
+      );
+      const jobNotes = shouldGenerateTailoring
+        ? await jobsRepo.listJobNotes(jobId)
+        : [];
+      const tailoringContext: TailoringJobContext = {
+        title: job.title,
+        employer: job.employer,
+        location: job.location,
+        jobBrief: job.jobBrief,
+        suitabilityReason: job.suitabilityReason,
+        degreeRequired: job.degreeRequired,
+        disciplines: job.disciplines,
+        notes: (jobNotes ?? []).map((note) => `${note.title}: ${note.content}`),
+        approved: {
+          summary: tailoredSummary,
+          headline: tailoredHeadline,
+          skills: parseApprovedTailoringSkills(tailoredSkills),
+        },
+      };
 
       if (
         shouldGenerateTailoring &&
-        (!tailoredSummary || !tailoredHeadline || options?.force)
+        (!hasAllTailoringFields || options?.force)
       ) {
         jobLogger.info("Generating tailoring content");
         await reserveTailoringUsage();
         const tailoringResult = await generateTailoring(
           job.jobDescription || "",
           profile,
+          tailoringContext,
         );
         if (tailoringResult.success && tailoringResult.data) {
           tailoringUsageSucceeded = true;
@@ -810,7 +856,8 @@ export async function summarizeJob(
         } else if (
           options?.force ||
           (shouldUpdateSummary && !tailoredSummary) ||
-          (shouldUpdateHeadline && !tailoredHeadline)
+          (shouldUpdateHeadline && !tailoredHeadline) ||
+          (shouldUpdateSkills && !tailoredSkills?.trim())
         ) {
           await settleTailoringUsage();
           return {
