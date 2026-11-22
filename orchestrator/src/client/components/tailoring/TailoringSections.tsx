@@ -3,12 +3,14 @@ import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import type {
   ResumeProjectCatalogItem,
   ResumeProjectsSettings,
+  TailoringPlanResult,
 } from "@shared/types.js";
 import {
   CheckCircle2,
   Circle,
   CircleAlert,
   Info,
+  Loader2,
   Plus,
   Redo2,
   Sparkles,
@@ -109,6 +111,12 @@ interface TailoringSectionsProps {
   onRemoveSkillGroup: (id: string) => void;
   onToggleProject: (id: string) => void;
   onTracerLinksEnabledChange: (value: boolean) => void;
+  plan?: TailoringPlanResult | null;
+  planLoading?: boolean;
+  onCheckEvidence?: () => void;
+  onAcceptPlanItem?: (index: number) => void;
+  onEditPlanItem?: (index: number, wording: string) => void;
+  onRejectPlanItem?: (index: number) => void;
 }
 
 type SectionState =
@@ -397,10 +405,18 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
   onRemoveSkillGroup,
   onToggleProject,
   onTracerLinksEnabledChange,
+  plan = null,
+  planLoading = false,
+  onCheckEvidence,
+  onAcceptPlanItem,
+  onEditPlanItem,
+  onRejectPlanItem,
 }) => {
   const [keywordDrafts, setKeywordDrafts] = useState<Record<string, string>>(
     {},
   );
+  const [editingPlanIndex, setEditingPlanIndex] = useState<number | null>(null);
+  const [planEditDraft, setPlanEditDraft] = useState("");
   const [summaryCountMode, setSummaryCountMode] =
     useState<TextCountMode>("words");
   const summaryFocusedRef = useRef(false);
@@ -415,6 +431,9 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
   const suggestionKeys = (
     ["summary", "headline", "skills"] as const
   ).filter((key) => Boolean(suggestions[key]));
+  const visiblePlanItems = (plan?.items ?? [])
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.userDecision !== "rejected");
   const skillsState: SectionState =
     skillsDraft.length === 0
       ? "none"
@@ -757,6 +776,168 @@ export const TailoringSections: React.FC<TailoringSectionsProps> = ({
           </AccordionContent>
         </AccordionItem>
       )}
+
+      <AccordionItem value="evidence-review" className={sectionClass}>
+        <AccordionTrigger className={triggerClass} aria-label="Evidence review">
+          <SectionTriggerLabel
+            title="Evidence review"
+            state={
+              plan
+                ? plan.check.blocked.length > 0 ||
+                  plan.check.unsupported.length > 0
+                  ? "review"
+                  : "ready"
+                : "optional"
+            }
+            count={
+              plan ? visiblePlanItems.length : undefined
+            }
+          />
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 px-3 pb-3 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="max-w-prose text-[11px] leading-5 text-muted-foreground">
+              Check each job-description requirement against your approved
+              evidence. Accept, edit, or reject every item yourself - nothing is
+              applied silently.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={actionButtonClass}
+              onClick={onCheckEvidence}
+              disabled={disableInputs || planLoading || !jobDescription.trim()}
+              aria-label="Check evidence"
+            >
+              {planLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Check evidence
+            </Button>
+          </div>
+
+          {!plan && (
+            <p className="text-[11px] text-muted-foreground">
+              No evidence check yet. Run one to see grounded wording suggestions.
+            </p>
+          )}
+
+          {visiblePlanItems.map(({ item, index }) => (
+            <div
+              key={`evidence-${index}`}
+              className="space-y-2 rounded-md border border-border/60 bg-background/40 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-xs font-semibold text-foreground/90">
+                  {item.jdRequirement}
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold",
+                    item.supportLevel === "strong"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : item.supportLevel === "partial"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                        : "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                  )}
+                >
+                  {item.supportLevel}
+                </span>
+              </div>
+              {item.evidenceRefs.length > 0 && (
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  Evidence: {item.evidenceRefs.join(", ")}
+                </p>
+              )}
+              {editingPlanIndex === index ? (
+                <textarea
+                  aria-label={`Edit proposed wording for requirement ${index + 1}`}
+                  className={`${inputClass} min-h-[80px]`}
+                  value={planEditDraft}
+                  onChange={(event) => setPlanEditDraft(event.target.value)}
+                  disabled={disableInputs}
+                />
+              ) : (
+                <p className="text-[11px] leading-5 text-foreground/80">
+                  {item.proposedWording}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {editingPlanIndex === index ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={actionButtonClass}
+                      aria-label={`Save evidence edit ${index + 1}`}
+                      onClick={() => {
+                        onEditPlanItem?.(index, planEditDraft);
+                        setEditingPlanIndex(null);
+                      }}
+                      disabled={disableInputs}
+                    >
+                      Save edit
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className={actionButtonClass}
+                      aria-label={`Cancel evidence edit ${index + 1}`}
+                      onClick={() => setEditingPlanIndex(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={actionButtonClass}
+                      aria-label={`Accept evidence item ${index + 1}`}
+                      onClick={() => onAcceptPlanItem?.(index)}
+                      disabled={
+                        disableInputs || item.userDecision === "accepted"
+                      }
+                    >
+                      {item.userDecision === "accepted" ? "Accepted" : "Accept"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className={actionButtonClass}
+                      aria-label={`Edit evidence item ${index + 1}`}
+                      onClick={() => {
+                        setEditingPlanIndex(index);
+                        setPlanEditDraft(item.proposedWording);
+                      }}
+                      disabled={disableInputs}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className={actionButtonClass}
+                      aria-label={`Reject evidence item ${index + 1}`}
+                      onClick={() => onRejectPlanItem?.(index)}
+                      disabled={disableInputs}
+                    >
+                      Reject
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </AccordionContent>
+      </AccordionItem>
 
       <AccordionItem value="skills" className={sectionClass}>
         <AccordionTrigger className={triggerClass} aria-label="Tailored Skills">

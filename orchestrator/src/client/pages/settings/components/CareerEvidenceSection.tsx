@@ -219,6 +219,7 @@ export const CareerEvidenceSection: React.FC<CareerEvidenceSectionProps> = ({
           </div>
 
           {bank.coreSkills.map((skill, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: skills have no stable id and are edited positionally
             <div key={`skill-${index}`} className="space-y-3 rounded-md border p-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
@@ -358,6 +359,7 @@ export const CareerEvidenceSection: React.FC<CareerEvidenceSectionProps> = ({
           </div>
 
           {bank.achievements.map((achievement, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: achievement ids are user-editable and items are edited positionally
             <div key={`achievement-${index}`} className="space-y-3 rounded-md border p-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">

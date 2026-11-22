@@ -8,11 +8,11 @@
 
 import * as settingsRepo from "@server/repositories/settings";
 import { settingsRegistry } from "@shared/settings-registry";
+import type { ResumeProfile } from "@shared/types";
 import type {
   CareerEvidenceBank,
   ClaimCheckResult,
 } from "@shared/types/career-evidence";
-import type { ResumeProfile } from "@shared/types";
 
 const LIMITS = {
   text: 400,

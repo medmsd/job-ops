@@ -137,4 +137,96 @@ describe("TailoringSections review layer", () => {
       screen.getByText(/Backend: Java, Spring Boot/),
     ).toBeInTheDocument();
   });
+
+  it("wires explicit Check evidence without generating content", () => {
+    const onCheckEvidence = vi.fn();
+    const onGenerateSummary = vi.fn();
+    renderReviewSections({ onCheckEvidence, onGenerateSummary });
+
+    fireEvent.click(screen.getByRole("button", { name: "Evidence review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check evidence" }));
+
+    expect(onCheckEvidence).toHaveBeenCalledTimes(1);
+    expect(onGenerateSummary).not.toHaveBeenCalled();
+  });
+
+  it("disables Check evidence when the description is empty", () => {
+    renderReviewSections({ jobDescription: "", onCheckEvidence: vi.fn() });
+
+    fireEvent.click(screen.getByRole("button", { name: "Evidence review" }));
+
+    expect(
+      screen.getByRole("button", { name: "Check evidence" }),
+    ).toBeDisabled();
+  });
+
+  it("renders plan items and wires Accept, Edit, and Reject", () => {
+    const onAcceptPlanItem = vi.fn();
+    const onEditPlanItem = vi.fn();
+    const onRejectPlanItem = vi.fn();
+    renderReviewSections({
+      plan: {
+        items: [
+          {
+            jdRequirement: "Build Java services",
+            evidenceRefs: ["project:payments-platform"],
+            proposedWording: "Built Java services",
+            targetField: "summary",
+            supportLevel: "strong",
+            status: "ready",
+            userDecision: "pending",
+          },
+          {
+            jdRequirement: "GraphQL APIs",
+            evidenceRefs: [],
+            proposedWording: "Designed GraphQL APIs",
+            targetField: "summary",
+            supportLevel: "unsupported",
+            status: "needs-review",
+            userDecision: "pending",
+          },
+        ],
+        check: {
+          blocked: [],
+          unsupported: ["graphql"],
+          covered: ["java"],
+          missingEvidenceRefs: [],
+        },
+      },
+      onAcceptPlanItem,
+      onEditPlanItem,
+      onRejectPlanItem,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Evidence review" }));
+
+    expect(screen.getByText("Build Java services")).toBeInTheDocument();
+    expect(screen.getByText("Built Java services")).toBeInTheDocument();
+    expect(
+      screen.getByText(/project:payments-platform/),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("unsupported").length).toBeGreaterThan(0);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Accept evidence item 1" }),
+    );
+    expect(onAcceptPlanItem).toHaveBeenCalledWith(0);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit evidence item 2" }),
+    );
+    const editBox = screen.getByRole("textbox", {
+      name: "Edit proposed wording for requirement 2",
+    });
+    fireEvent.change(editBox, { target: { value: "Edited GraphQL wording" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save evidence edit 2" }),
+    );
+    expect(onEditPlanItem).toHaveBeenCalledWith(1, "Edited GraphQL wording");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reject evidence item 1" }),
+    );
+    expect(onRejectPlanItem).toHaveBeenCalledWith(0);
+  });
 });

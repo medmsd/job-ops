@@ -38,11 +38,11 @@ import {
 } from "@client/pages/settings/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { normalizeStringArray } from "@shared/normalize-string-array.js";
-import { createEmptyCareerEvidenceBank } from "@shared/types/career-evidence.js";
 import {
   type UpdateSettingsInput,
   updateSettingsSchema,
 } from "@shared/settings-schema.js";
+import { createEmptyCareerEvidenceBank } from "@shared/types/career-evidence.js";
 import type {
   AppSettings,
   JobStatus,

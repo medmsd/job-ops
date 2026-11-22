@@ -1,5 +1,4 @@
 import { getDefaultPromptTemplate } from "../prompt-template-definitions";
-import { createEmptyCareerEvidenceBank } from "../types/career-evidence";
 import type {
   ApplicationTask,
   AppSettings,
@@ -8,6 +7,7 @@ import type {
   ResumeProjectCatalogItem,
   StageEvent,
 } from "../types";
+import { createEmptyCareerEvidenceBank } from "../types/career-evidence";
 
 export const createJob = (overrides: Partial<Job> = {}): Job => ({
   id: "job-1",

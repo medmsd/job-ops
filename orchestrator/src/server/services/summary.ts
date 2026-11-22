@@ -3,8 +3,8 @@
  */
 
 import { logger } from "@infra/logger";
-import type { CareerEvidenceBank } from "@shared/types/career-evidence";
 import type { ResumeProfile } from "@shared/types";
+import type { CareerEvidenceBank } from "@shared/types/career-evidence";
 import { stripHtmlTags } from "@shared/utils/string";
 import { buildEvidencePromptBlock, getCareerEvidenceBank } from "./careerEvidence";
 import type { JsonSchemaDefinition } from "./llm/types";

@@ -9,10 +9,10 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
-import { getCareerEvidenceBank } from "@server/services/careerEvidence";
 import * as integrationsRepo from "@server/repositories/post-application-integrations";
 import { listPostApplicationMessagesForJob } from "@server/repositories/post-application-messages";
 import * as sentEmailsRepo from "@server/repositories/post-application-sent-emails";
+import { getCareerEvidenceBank } from "@server/services/careerEvidence";
 import type {
   JsonSchemaDefinition,
   LlmMessage,

@@ -20,6 +20,7 @@ import type {
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
+  TailoringPlanResult,
   TracerAnalyticsResponse,
   TracerReadinessResponse,
 } from "@shared/types";
@@ -375,6 +376,16 @@ export async function summarizeJob(
   const query = params.toString() ? `?${params.toString()}` : "";
   return fetchApi<Job>(`/jobs/${id}/summarize${query}`, {
     method: "POST",
+  });
+}
+
+export async function getTailoringPlan(
+  id: string,
+  text?: string,
+): Promise<TailoringPlanResult> {
+  return fetchApi<TailoringPlanResult>(`/jobs/${id}/tailoring-plan`, {
+    method: "POST",
+    body: text ? JSON.stringify({ text }) : undefined,
   });
 }
 

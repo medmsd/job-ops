@@ -4,7 +4,7 @@ import { useSettings } from "@client/hooks/useSettings";
 import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
-import type { Job } from "@shared/types.js";
+import type { Job, TailoringPlanResult } from "@shared/types.js";
 import { CHAT_STYLE_MANUAL_LANGUAGE_LABELS } from "@shared/types.js";
 import {
   Check,
@@ -23,6 +23,7 @@ import { Tip } from "@/client/components/Tip";
 import { formatUserFacingError } from "@/client/lib/error-format";
 import { showErrorToast } from "@/client/lib/error-toast";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   fromEditableSkillGroups,
   getOriginalHeadline,
@@ -208,8 +209,17 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     toBaselineFromJob(props.job),
   );
   const [suggestions, setSuggestions] = useState<TailoringSuggestions>({});
+  const [plan, setPlan] = useState<TailoringPlanResult | null>(null);
+  const [isCheckingEvidence, setIsCheckingEvidence] = useState(false);
+  const [checkedText, setCheckedText] = useState<string | null>(null);
+  const [evidenceAcknowledged, setEvidenceAcknowledged] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset AI baseline and review state only when switching jobs
+  const currentEvidenceText = useMemo(
+    () => `${summary}\n${headline}\n${skillsJson}`,
+    [summary, headline, skillsJson],
+  );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset review state only when switching jobs
   useEffect(() => {
     setAiBaseline({
       summary: props.job.tailoredSummary ?? "",
@@ -217,7 +227,16 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       skillsJson: normalizeSkillsJson(props.job.tailoredSkills),
     });
     setSuggestions({});
+    setPlan(null);
+    setCheckedText(null);
+    setEvidenceAcknowledged(false);
   }, [props.job.id]);
+
+  // Any edit invalidates a previous acknowledgment; re-check before generating.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run only when the checked CV text changes
+  useEffect(() => {
+    setEvidenceAcknowledged(false);
+  }, [currentEvidenceText]);
 
   const tracerEnableBlocked =
     !tracerLinksEnabled && !tracerReadiness?.canEnable;
@@ -661,6 +680,110 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     [originalValues, setSummary, setHeadline, setSkillsDraft, dismissSuggestion],
   );
 
+  const handleCheckEvidence = useCallback(async () => {
+    try {
+      setIsCheckingEvidence(true);
+      await flushAutosave();
+      const result = await api.getTailoringPlan(
+        props.job.id,
+        currentEvidenceText,
+      );
+      setPlan(result);
+      setCheckedText(currentEvidenceText);
+      setEvidenceAcknowledged(false);
+      toast.success("Evidence check complete", {
+        description: "Review the plan below before applying any wording.",
+      });
+    } catch (error) {
+      showErrorToast(error, "Evidence check failed");
+    } finally {
+      setIsCheckingEvidence(false);
+    }
+  }, [flushAutosave, props.job.id, currentEvidenceText]);
+
+  const handleAcceptPlanItem = useCallback(
+    (index: number) => {
+      const item = plan?.items[index];
+      if (!item) return;
+      const wording = item.proposedWording.trim();
+      if (!wording) return;
+
+      if (item.targetField === "headline") {
+        setHeadline(wording);
+      } else if (item.targetField === "skills") {
+        setSkillsDraft((current) => {
+          const next = current.map((group) => ({ ...group }));
+          if (next.length === 0) {
+            next.push({
+              id: `evidence-${index}`,
+              name: "Tailored skills",
+              keywordsText: wording,
+            });
+          } else {
+            const existing = next[0].keywordsText.trim();
+            next[0] = {
+              ...next[0],
+              keywordsText: existing ? `${existing}, ${wording}` : wording,
+            };
+          }
+          return next;
+        });
+      } else {
+        setSummary((current) => {
+          const base = current.trim();
+          if (!base) return wording;
+          return `${base.replace(/[.\s]+$/, "")}. ${wording}`.trim();
+        });
+      }
+
+      setPlan((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((entry, i) =>
+                i === index ? { ...entry, userDecision: "accepted" } : entry,
+              ),
+            }
+          : current,
+      );
+    },
+    [plan, setSummary, setHeadline, setSkillsDraft],
+  );
+
+  const handleEditPlanItem = useCallback(
+    (index: number, wording: string) => {
+      const cleaned = wording.trim();
+      if (!cleaned) return;
+      setPlan((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((entry, i) =>
+                i === index
+                  ? { ...entry, proposedWording: cleaned, userDecision: "edited" }
+                  : entry,
+              ),
+            }
+          : current,
+      );
+      setEvidenceAcknowledged(false);
+    },
+    [],
+  );
+
+  const handleRejectPlanItem = useCallback((index: number) => {
+    setPlan((current) =>
+      current
+        ? {
+            ...current,
+            items: current.items.map((entry, i) =>
+              i === index ? { ...entry, userDecision: "rejected" } : entry,
+            ),
+          }
+        : current,
+    );
+  }, []);
+
   const disableInputs = Boolean(generateTarget) || isGeneratingPdf;
   const tailoringReadiness = useMemo(
     () =>
@@ -687,6 +810,24 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     ],
   );
   const isDraftReady = tailoringReadiness.canGeneratePdf;
+
+  const evidenceCheck = plan?.check ?? null;
+  const evidenceCheckStale =
+    checkedText !== null && checkedText !== currentEvidenceText;
+  const hasNeverClaimBlocker = (evidenceCheck?.blocked.length ?? 0) > 0;
+  const hasUnsupportedClaims = (evidenceCheck?.unsupported.length ?? 0) > 0;
+  const requiresAcknowledgment = !hasNeverClaimBlocker && hasUnsupportedClaims;
+  const canGeneratePdf =
+    isDraftReady &&
+    !evidenceCheckStale &&
+    !hasNeverClaimBlocker &&
+    (!requiresAcknowledgment || evidenceAcknowledged);
+  const showEvidenceGate = Boolean(
+    evidenceCheck &&
+      !evidenceCheckStale &&
+      (hasNeverClaimBlocker || hasUnsupportedClaims),
+  );
+
   const resolvedLanguage = useMemo(() => {
     const mode = settings?.chatStyleLanguageMode.value;
     if (mode === "match-job-description") return "Match job description";
@@ -764,6 +905,12 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       onRemoveSkillGroup: handleRemoveSkillGroup,
       onToggleProject: handleToggleProject,
       onTracerLinksEnabledChange: setTracerLinksEnabled,
+      plan,
+      planLoading: isCheckingEvidence,
+      onCheckEvidence: handleCheckEvidence,
+      onAcceptPlanItem: handleAcceptPlanItem,
+      onEditPlanItem: handleEditPlanItem,
+      onRejectPlanItem: handleRejectPlanItem,
     }),
     [
       catalog,
@@ -809,6 +956,12 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       handleRemoveSkillGroup,
       handleToggleProject,
       setTracerLinksEnabled,
+      plan,
+      isCheckingEvidence,
+      handleCheckEvidence,
+      handleAcceptPlanItem,
+      handleEditPlanItem,
+      handleRejectPlanItem,
     ],
   );
 
@@ -873,7 +1026,7 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
           <Button
             onClick={handleGeneratePdf}
             disabled={
-              Boolean(generateTarget) || isGeneratingPdf || !isDraftReady
+              Boolean(generateTarget) || isGeneratingPdf || !canGeneratePdf
             }
             size="sm"
           >
@@ -908,6 +1061,60 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
         maxKeywordsPerSkill={settings?.chatStyleMaxKeywordsPerSkill.value}
         isLoading={isSettingsLoading}
       />
+
+      {showEvidenceGate && (
+        <div
+          role="alert"
+          className="space-y-3 rounded-md border border-amber-500/25 bg-amber-500/[0.04] p-3"
+        >
+          <div className="flex items-start gap-2">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground/90">
+                Evidence check needs attention
+              </p>
+              {hasNeverClaimBlocker && (
+                <p className="text-[11px] leading-5 text-rose-300">
+                  Remove these blocked terms before generating a PDF:{" "}
+                  {evidenceCheck?.blocked.join(", ")}. They cannot be
+                  acknowledged away.
+                </p>
+              )}
+              {hasUnsupportedClaims && (
+                <p className="text-[11px] leading-5 text-amber-300/90">
+                  These terms have no supporting evidence:{" "}
+                  {evidenceCheck?.unsupported.join(", ")}. Only acknowledge them
+                  if you can personally verify them.
+                </p>
+              )}
+            </div>
+          </div>
+          {requiresAcknowledgment && (
+            <label
+              htmlFor="evidence-acknowledged"
+              className="flex cursor-pointer items-center gap-2 text-xs text-foreground"
+            >
+              <Checkbox
+                id="evidence-acknowledged"
+                checked={evidenceAcknowledged}
+                onCheckedChange={(checked) =>
+                  setEvidenceAcknowledged(Boolean(checked))
+                }
+                disabled={disableInputs}
+              />
+              I have reviewed the unsupported claims and want to generate the
+              PDF anyway.
+            </label>
+          )}
+        </div>
+      )}
+
+      {evidenceCheckStale && (
+        <output className="block rounded-md border border-amber-500/25 bg-amber-500/[0.04] p-3 text-[11px] leading-5 text-amber-300/90">
+          The CV changed after the evidence check. Run Check evidence again
+          before generating a PDF.
+        </output>
+      )}
 
       <TailoringSections {...tailoringSectionsProps} />
     </div>

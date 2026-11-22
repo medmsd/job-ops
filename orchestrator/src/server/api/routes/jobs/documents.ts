@@ -3,11 +3,13 @@ import { AppError, badRequest } from "@infra/errors";
 import { fail, ok, okWithMeta } from "@infra/http";
 import { logger } from "@infra/logger";
 import { trackServerProductEvent } from "@infra/product-analytics";
+import { getRequestId } from "@infra/request-context";
 import { isDemoMode } from "@server/config/demo";
 import { resolveRequestOrigin } from "@server/infra/request-origin";
 import { generateFinalPdf, summarizeJob } from "@server/pipeline/index";
 import * as jobDocumentsRepo from "@server/repositories/job-documents";
 import * as jobsRepo from "@server/repositories/jobs";
+import { getCareerEvidenceBank } from "@server/services/careerEvidence";
 import {
   simulateGeneratePdf,
   simulateSummarizeJob,
@@ -17,8 +19,11 @@ import {
   storeJobDocument,
 } from "@server/services/job-document-storage";
 import { uploadJobPdf } from "@server/services/job-pdf-upload";
+import { getProfile } from "@server/services/profile";
+import { generateTailoringPlan } from "@server/services/tailoring-plan";
 import { getSafeInlineJobDocumentMediaType } from "@shared/job-document-classification.js";
 import { type Request, type Response, Router } from "express";
+import { z } from "zod";
 import {
   appErrorFromPipelineFailure,
   hydrateJobPdfFreshness,
@@ -38,6 +43,10 @@ const tailoringGenerateFields = [
   "projects",
 ] as const;
 type TailoringGenerateField = (typeof tailoringGenerateFields)[number];
+
+const tailoringPlanRequestSchema = z.object({
+  text: z.string().max(20000).optional(),
+});
 
 function encodeContentDispositionFileName(value: string): string {
   return encodeURIComponent(value).replace(
@@ -458,6 +467,54 @@ jobsDocumentsRouter.post(
         job,
         "POST /api/jobs/:id/summarize",
       );
+    } catch (error) {
+      fail(res, toJobsRouteError(error));
+    }
+  },
+);
+
+jobsDocumentsRouter.post(
+  "/:id/tailoring-plan",
+  async (req: Request, res: Response) => {
+    try {
+      const job = await requireJob(req.params.id);
+      if (!job.jobDescription?.trim()) {
+        return fail(
+          res,
+          badRequest("Add a job description before checking evidence."),
+        );
+      }
+
+      const parsedBody = tailoringPlanRequestSchema.safeParse(req.body ?? {});
+      if (!parsedBody.success) {
+        return fail(res, badRequest("Invalid tailoring plan request."));
+      }
+
+      const [evidenceBank, profile] = await Promise.all([
+        getCareerEvidenceBank(),
+        getProfile(),
+      ]);
+      const result = await generateTailoringPlan({
+        jobDescription: job.jobDescription,
+        profile,
+        evidenceBank,
+        currentText: parsedBody.data.text ?? "",
+      });
+
+      if (!result.success) {
+        return fail(
+          res,
+          badRequest(result.error ?? "Failed to build the tailoring plan"),
+        );
+      }
+
+      logger.info("Tailoring plan generated", {
+        route: "POST /api/jobs/:id/tailoring-plan",
+        jobId: job.id,
+        requestId: getRequestId(),
+        items: result.data?.items.length ?? 0,
+      });
+      ok(res, result.data);
     } catch (error) {
       fail(res, toJobsRouteError(error));
     }

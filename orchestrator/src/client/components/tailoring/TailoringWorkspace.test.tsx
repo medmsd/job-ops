@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@client/api", () => ({
   generateJobPdf: vi.fn().mockResolvedValue({}),
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
+  getTailoringPlan: vi.fn(),
   summarizeJob: vi.fn(),
   updateJob: vi.fn().mockImplementation(async (_id, payload) => payload),
 }));
@@ -65,6 +66,12 @@ vi.mock("./TailoringSections", () => ({
           onClick={() => props.onKeepCurrentSuggestion("summary")}
         >
           keep summary
+        </button>
+        <button type="button" onClick={() => props.onCheckEvidence()}>
+          check evidence
+        </button>
+        <button type="button" onClick={() => props.onAcceptPlanItem(0)}>
+          accept plan item
         </button>
       </div>
     );
@@ -265,5 +272,141 @@ describe("TailoringWorkspace generation", () => {
       expect(mocks.sectionProps.current?.suggestions.summary).toBeUndefined();
     });
     expect(mocks.sectionProps.current?.summary).toBe("Manual summary");
+  });
+});
+
+describe("TailoringWorkspace evidence review", () => {
+  const readyJob = () => makeJob({ tailoredSkills: generatedSkills });
+
+  const planResult = (check: {
+    blocked: string[];
+    unsupported: string[];
+  }) => ({
+    items: [
+      {
+        jdRequirement: "Build Java services",
+        evidenceRefs: ["project:payments-platform"],
+        proposedWording: "Built Java services",
+        targetField: "summary",
+        supportLevel: "strong",
+        status: "ready",
+        userDecision: "pending",
+      },
+    ],
+    check: {
+      blocked: check.blocked,
+      unsupported: check.unsupported,
+      covered: [],
+      missingEvidenceRefs: [],
+    },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.sectionProps.current = null;
+    vi.mocked(api.updateJob).mockResolvedValue(readyJob());
+    vi.mocked(api.getResumeProjectsCatalog).mockResolvedValue([]);
+    vi.mocked(api.getTailoringPlan).mockResolvedValue(
+      planResult({ blocked: [], unsupported: [] }) as never,
+    );
+  });
+
+  it("does not call AI or the evidence check when the workspace opens", () => {
+    render(
+      <TailoringWorkspace mode="editor" job={readyJob()} onUpdate={vi.fn()} />,
+    );
+
+    expect(api.summarizeJob).not.toHaveBeenCalled();
+    expect(api.getTailoringPlan).not.toHaveBeenCalled();
+  });
+
+  it("loads a plan only after the explicit Check evidence action", async () => {
+    render(
+      <TailoringWorkspace mode="editor" job={readyJob()} onUpdate={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "check evidence" }));
+
+    await waitFor(() => {
+      expect(api.getTailoringPlan).toHaveBeenCalledWith(
+        "job-1",
+        expect.stringContaining("Saved summary"),
+      );
+    });
+    expect(mocks.sectionProps.current?.plan.items).toHaveLength(1);
+  });
+
+  it("applies accepted plan wording without silent generation", async () => {
+    render(
+      <TailoringWorkspace mode="editor" job={readyJob()} onUpdate={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "check evidence" }));
+    await waitFor(() => {
+      expect(mocks.sectionProps.current?.plan).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "accept plan item" }));
+
+    await waitFor(() => {
+      expect(mocks.sectionProps.current?.summary).toContain(
+        "Built Java services",
+      );
+    });
+    expect(api.summarizeJob).not.toHaveBeenCalled();
+  });
+
+  it("hard-blocks neverClaim terms even after acknowledgment", async () => {
+    vi.mocked(api.getTailoringPlan).mockResolvedValue(
+      planResult({
+        blocked: ["Kubernetes administrator"],
+        unsupported: [],
+      }) as never,
+    );
+    render(
+      <TailoringWorkspace mode="editor" job={readyJob()} onUpdate={vi.fn()} />,
+    );
+    expect(
+      screen.getByRole("button", { name: /generate pdf/i }),
+    ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "check evidence" }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Kubernetes administrator",
+      );
+    });
+
+    expect(
+      screen.getByRole("button", { name: /generate pdf/i }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByLabelText(/I have reviewed the unsupported claims/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("requires acknowledgment for unsupported claims and resets it on edits", async () => {
+    vi.mocked(api.getTailoringPlan).mockResolvedValue(
+      planResult({ blocked: [], unsupported: ["graphql"] }) as never,
+    );
+    render(
+      <TailoringWorkspace mode="editor" job={readyJob()} onUpdate={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "check evidence" }));
+    const acknowledgment = await screen.findByLabelText(
+      /I have reviewed the unsupported claims/i,
+    );
+    expect(
+      screen.getByRole("button", { name: /generate pdf/i }),
+    ).toBeDisabled();
+
+    fireEvent.click(acknowledgment);
+    expect(
+      screen.getByRole("button", { name: /generate pdf/i }),
+    ).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "edit summary" }));
+    expect(
+      screen.getByRole("button", { name: /generate pdf/i }),
+    ).toBeDisabled();
   });
 });

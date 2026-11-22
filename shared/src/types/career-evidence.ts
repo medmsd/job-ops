@@ -61,6 +61,8 @@ export interface TailoringPlanItem {
   jdRequirement: string;
   evidenceRefs: string[];
   proposedWording: string;
+  /** Where Accept applies the proposed wording. Defaults to "summary". */
+  targetField?: "summary" | "headline" | "skills";
   supportLevel: "strong" | "partial" | "unsupported";
   status: "ready" | "needs-review";
   userDecision: "pending" | "accepted" | "edited" | "rejected";
