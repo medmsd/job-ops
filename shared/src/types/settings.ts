@@ -2,6 +2,7 @@ import {
   TYPST_THEME_LABELS,
   TYPST_THEME_VALUES,
 } from "../generated/typst-themes";
+import type { CareerEvidenceBank } from "./career-evidence";
 import type {
   LocationInputMode,
   LocationMatchStrictness,
@@ -258,6 +259,7 @@ export interface AppSettings {
   pipelineWebhookUrl: Resolved<string>;
   jobCompleteWebhookUrl: Resolved<string>;
   resumeProjects: Resolved<ResumeProjectsSettings>;
+  careerEvidence: Resolved<CareerEvidenceBank>;
   pdfRenderer: Resolved<PdfRenderer>;
   typstTheme: Resolved<TypstTheme>;
   pdfPaperSize: Resolved<PdfPaperSize>;

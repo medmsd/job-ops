@@ -1,4 +1,5 @@
 import { getDefaultPromptTemplate } from "../prompt-template-definitions";
+import { createEmptyCareerEvidenceBank } from "../types/career-evidence";
 import type {
   ApplicationTask,
   AppSettings,
@@ -158,6 +159,11 @@ export const createAppSettings = (
       lockedProjectIds: [],
       aiSelectableProjectIds: [],
     },
+    override: null,
+  },
+  careerEvidence: {
+    value: createEmptyCareerEvidenceBank(),
+    default: createEmptyCareerEvidenceBank(),
     override: null,
   },
   pdfRenderer: {

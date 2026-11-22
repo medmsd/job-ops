@@ -6,6 +6,10 @@ import {
 } from "./location-preferences";
 import { getDefaultPromptTemplate } from "./prompt-template-definitions";
 import {
+  type CareerEvidenceBank,
+  createEmptyCareerEvidenceBank,
+} from "./types/career-evidence";
+import {
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
   type ChatStyleLanguageMode,
@@ -338,6 +342,54 @@ export const resumeProjectsSchema = z.object({
   aiSelectableProjectIds: z.array(z.string().trim().min(1)).max(200),
 });
 
+const CAREER_EVIDENCE_STRING_LIMIT = 400;
+const CAREER_EVIDENCE_LIST_LIMIT = 100;
+
+const careerEvidenceString = z.string().trim().max(CAREER_EVIDENCE_STRING_LIMIT);
+const careerEvidenceStringList = z
+  .array(careerEvidenceString)
+  .max(CAREER_EVIDENCE_LIST_LIMIT);
+
+export const careerEvidenceSchema = z.object({
+  targetRoles: careerEvidenceStringList,
+  coreSkills: z
+    .array(
+      z.object({
+        name: careerEvidenceString,
+        years: z.number().int().min(0).max(80).nullable(),
+        level: careerEvidenceString,
+        evidence: careerEvidenceStringList,
+        aliases: careerEvidenceStringList,
+      }),
+    )
+    .max(CAREER_EVIDENCE_LIST_LIMIT),
+  achievements: z
+    .array(
+      z.object({
+        id: careerEvidenceString,
+        text: careerEvidenceString,
+        metric: careerEvidenceString,
+        evidence: careerEvidenceStringList,
+      }),
+    )
+    .max(CAREER_EVIDENCE_LIST_LIMIT),
+  alwaysInclude: careerEvidenceStringList,
+  neverClaim: careerEvidenceStringList,
+  preferredTerms: careerEvidenceStringList,
+  avoidTerms: careerEvidenceStringList,
+});
+
+function parseCareerEvidenceBank(
+  raw: string | undefined,
+): CareerEvidenceBank | null {
+  if (!raw) return null;
+  try {
+    return careerEvidenceSchema.parse(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 export const settingsRegistry = {
   // --- Typed Settings ---
   model: {
@@ -438,6 +490,14 @@ export const settingsRegistry = {
     ): string | null => {
       return value ? JSON.stringify(value) : null;
     },
+  },
+  careerEvidence: {
+    kind: "typed" as const,
+    schema: careerEvidenceSchema,
+    default: (): CareerEvidenceBank => createEmptyCareerEvidenceBank(),
+    parse: parseCareerEvidenceBank,
+    serialize: (value: CareerEvidenceBank | null | undefined): string | null =>
+      value ? JSON.stringify(value) : null,
   },
   pdfRenderer: {
     kind: "typed" as const,

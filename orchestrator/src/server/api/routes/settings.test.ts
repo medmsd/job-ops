@@ -142,6 +142,61 @@ describe.sequential("Settings API routes", () => {
     expect(body.data.scoringPromptTemplate.value).toBe(
       getDefaultPromptTemplate("scoringPromptTemplate"),
     );
+    expect(body.data.careerEvidence.value).toEqual({
+      targetRoles: [],
+      coreSkills: [],
+      achievements: [],
+      alwaysInclude: [],
+      neverClaim: [],
+      preferredTerms: [],
+      avoidTerms: [],
+    });
+  });
+
+  it("persists and validates the career evidence bank", async () => {
+    const bank = {
+      targetRoles: ["Senior Java Backend Engineer"],
+      coreSkills: [
+        {
+          name: "Java",
+          years: 8,
+          level: "expert",
+          evidence: ["project:payments-platform"],
+          aliases: ["JVM"],
+        },
+      ],
+      achievements: [
+        {
+          id: "ev-latency",
+          text: "Reduced p95 latency",
+          metric: "77% reduction",
+          evidence: ["project:payments-platform"],
+        },
+      ],
+      alwaysInclude: ["REST APIs"],
+      neverClaim: ["Kubernetes administrator"],
+      preferredTerms: ["Spring Boot"],
+      avoidTerms: ["ninja"],
+    };
+
+    const badPatch = await fetch(`${baseUrl}/api/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        careerEvidence: { ...bank, neverClaim: "not-an-array" },
+      }),
+    });
+    expect(badPatch.status).toBe(400);
+
+    const patchRes = await fetch(`${baseUrl}/api/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ careerEvidence: bank }),
+    });
+    expect(patchRes.status).toBe(200);
+    const patchBody = await patchRes.json();
+    expect(patchBody.data.careerEvidence.value).toEqual(bank);
+    expect(patchBody.data.careerEvidence.override).toEqual(bank);
   });
 
   it("does not expose Basic Auth env values through settings", async () => {
