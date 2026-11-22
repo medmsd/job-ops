@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
       label: "Getting Started",
       items: [
         "getting-started/self-hosting",
+        "getting-started/local-development",
         "getting-started/gmail-oauth-setup",
         "getting-started/sso-setup",
       ],
@@ -66,6 +67,7 @@ const sidebars: SidebarsConfig = {
       label: "Self-Hosting & Ops",
       items: [
         "getting-started/self-hosting",
+        "getting-started/local-development",
         "getting-started/gmail-oauth-setup",
         "getting-started/sso-setup",
         "getting-started/database-backups",

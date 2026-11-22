@@ -36,7 +36,7 @@ Use the path that matches your change:
 
 ## Local Setup (Minimal)
 
-For full end-user setup, environment variables, OAuth, and deployment details, use the [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting) and [Gmail OAuth Setup](https://jobops.dakheera47.com/docs/getting-started/gmail-oauth-setup).
+For full end-user setup, environment variables, OAuth, and deployment details, use the [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting) and [Gmail OAuth Setup](https://jobops.dakheera47.com/docs/getting-started/gmail-oauth-setup). For a step-by-step native setup without Docker, see [Run Locally Without Docker](https://jobops.dakheera47.com/docs/next/getting-started/local-development).
 
 Contributor baseline from repo root:
 

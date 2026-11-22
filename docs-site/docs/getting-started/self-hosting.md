@@ -5,7 +5,7 @@ description: Deploy JobOps with Docker Compose and configure onboarding integrat
 sidebar_position: 1
 ---
 
-The easiest way to run JobOps is via Docker Compose. The app is self-configuring and guides you through setup on first launch.
+The easiest way to run JobOps is via Docker Compose. The app is self-configuring and guides you through setup on first launch. To run from source without Docker, see [Run Locally Without Docker](/docs/next/getting-started/local-development).
 
 ## Prerequisites
 
