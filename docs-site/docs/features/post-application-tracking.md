@@ -106,7 +106,7 @@ Confidence interpretation:
 
 ### Email a recruiter
 
-On a job with a generated tailored PDF, open the **Apply** tab and click **Apply now** (or use **Email recruiter** in the **More actions** menu). JobOps loads the saved cover letter, then shows a preview you can edit. Opening the preview never calls the AI; use **Cover letter** and **Generate** first if you want a new draft.
+On a job with a generated tailored PDF, open the **Apply** tab in the orchestrator and click **Apply now**, use **Email recruiter** in the **More actions** menu, or open the job details page (`/job/<jobId>`) and click **Apply now** in the sidebar. JobOps loads the saved cover letter, then shows a preview you can edit. Opening the preview never calls the AI; use **Cover letter** and **Generate** first if you want a new draft.
 
 - **To**: defaults to the `From` address of a matched Tracking Inbox email. If no email is matched, JobOps uses the first valid address from the job's `emails` field and then its job description (including `mailto:` links, HTML entities such as `&#64;`, and `(at)` / `[dot]` obfuscation). If none is found, the field opens empty for you to type the address. The preview labels addresses taken from job details or entered manually so you can verify them. Editable, but only a single plain email address is accepted. No BCC is added.
 - **Cover letter**: editable. Changing it updates the **Message** below automatically.
