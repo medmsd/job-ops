@@ -1,6 +1,7 @@
 import * as api from "@client/api";
 import type { Job } from "@shared/types.js";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TailoringWorkspace } from "./TailoringWorkspace";
 
@@ -173,6 +174,47 @@ describe("TailoringWorkspace generation", () => {
       "job-1",
       expect.objectContaining({ tailoredSummary: "Manual summary" }),
     );
+  });
+
+  it("keeps manual edits after autosave refreshes the job prop", async () => {
+    const AutosavingHarness = () => {
+      const [job, setJob] = useState(() => makeJob());
+      return (
+        <TailoringWorkspace
+          mode="editor"
+          job={job}
+          onUpdate={(updated) => {
+            if (updated) setJob(updated);
+          }}
+        />
+      );
+    };
+    vi.mocked(api.updateJob).mockResolvedValue(
+      makeJob({ tailoredSummary: "Manual summary" }),
+    );
+
+    render(<AutosavingHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "edit summary" }));
+    await waitFor(
+      () => {
+        expect(api.updateJob).toHaveBeenCalledWith(
+          "job-1",
+          expect.objectContaining({ tailoredSummary: "Manual summary" }),
+        );
+      },
+      { timeout: 3000 },
+    );
+
+    await generateAll();
+
+    await waitFor(() => {
+      expect(mocks.sectionProps.current?.suggestions.summary).toBeDefined();
+    });
+    expect(mocks.sectionProps.current?.summary).toBe("Manual summary");
+    expect(mocks.sectionProps.current?.suggestions.summary).toMatchObject({
+      current: "Manual summary",
+      suggested: "AI summary",
+    });
   });
 
   it("applies AI output to fields that were not manually edited", async () => {

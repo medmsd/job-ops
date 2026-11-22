@@ -209,22 +209,15 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   );
   const [suggestions, setSuggestions] = useState<TailoringSuggestions>({});
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear review state when switching jobs
-  useEffect(() => {
-    setSuggestions({});
-  }, [props.job.id]);
-
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset AI baseline and review state only when switching jobs
   useEffect(() => {
     setAiBaseline({
       summary: props.job.tailoredSummary ?? "",
       headline: props.job.tailoredHeadline ?? "",
       skillsJson: normalizeSkillsJson(props.job.tailoredSkills),
     });
-  }, [
-    props.job.tailoredSummary,
-    props.job.tailoredHeadline,
-    props.job.tailoredSkills,
-  ]);
+    setSuggestions({});
+  }, [props.job.id]);
 
   const tracerEnableBlocked =
     !tracerLinksEnabled && !tracerReadiness?.canEnable;
