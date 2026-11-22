@@ -571,6 +571,8 @@ export interface UpdateJobInput {
   tailoredSummary?: string;
   tailoredHeadline?: string;
   tailoredSkills?: string;
+  tailoredResumeSnapshotId?: string | null;
+  tailoredResumeVersion?: number | null;
   selectedProjectIds?: string;
   pdfPath?: string;
   pdfSource?: JobPdfSource | null;
