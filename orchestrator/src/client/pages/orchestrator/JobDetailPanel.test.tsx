@@ -39,8 +39,16 @@ const mockSettings = {
 
 vi.mock("@/components/ui/dropdown-menu", () => {
   return {
-    DropdownMenu: ({ children }: { children: React.ReactNode }) => (
-      <div>{children}</div>
+    DropdownMenu: ({
+      children,
+      modal,
+    }: {
+      children: React.ReactNode;
+      modal?: boolean;
+    }) => (
+      <div data-testid="job-actions-menu" data-modal={String(modal)}>
+        {children}
+      </div>
     ),
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
       <>{children}</>
@@ -378,6 +386,21 @@ describe("JobDetailPanel", () => {
 
     fireEvent.click(applyNow);
     expect(screen.getByTestId("compose-email-modal")).toBeInTheDocument();
+  });
+
+  it("uses a non-modal actions menu so closing a dialog does not block clicks", async () => {
+    await renderJobDetailPanel({
+      activeTab: "ready",
+      activeJobs: [],
+      selectedJob: createJob({ status: "ready" }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(screen.getByTestId("job-actions-menu")).toHaveAttribute(
+      "data-modal",
+      "false",
+    );
   });
 
   it("opens the cover letter dialog from the Apply tab", async () => {

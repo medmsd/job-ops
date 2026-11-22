@@ -77,6 +77,7 @@ const jobWith = (overrides: Record<string, unknown> = {}) => ({
   tailoredHeadline: "Engineer",
   tailoredSummary: "Experienced engineer",
   tailoredSkills: "TypeScript",
+  coverLetter: COVER_LETTER,
   ...overrides,
 });
 
@@ -105,6 +106,7 @@ describe("recruiter email service", () => {
       tailoredHeadline: "Engineer",
       tailoredSummary: "Experienced engineer",
       tailoredSkills: "TypeScript",
+      coverLetter: COVER_LETTER,
     });
     mocks.saveJobCoverLetter.mockResolvedValue({
       id: "job-1",
@@ -305,6 +307,29 @@ describe("recruiter email service", () => {
       to: "",
       recipientSource: "manual",
     });
+  });
+
+  it("does not call the LLM when opening a preview without a saved cover letter", async () => {
+    mocks.listMessages.mockResolvedValueOnce({ items: [], total: 0 });
+    mocks.getJobById.mockResolvedValueOnce(
+      jobWith({
+        coverLetter: null,
+        emails: null,
+        jobDescription: "No contact details.",
+      }),
+    );
+
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+
+    expect(preview).toMatchObject({
+      coverLetter: "",
+      body: "",
+      to: "",
+      recipientSource: "manual",
+    });
+    expect(mocks.createLlm).not.toHaveBeenCalled();
+    expect(mocks.callJson).not.toHaveBeenCalled();
+    expect(mocks.saveJobCoverLetter).not.toHaveBeenCalled();
   });
 
   it("sends to a manually entered address for a manual preview", async () => {

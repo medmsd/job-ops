@@ -17,7 +17,7 @@ The Tracking Inbox monitors Gmail or Outlook (Microsoft Graph) for job-applicati
 2. Matches emails to tracked jobs using AI
 3. Updates timeline/state when confidence is high
 4. Queues uncertain matches for manual review
-5. Prepares a recruiter email with a generated cover letter and the tailored PDF, sent only after you confirm
+5. Prepares a recruiter email from the saved cover letter and tailored PDF, sent only after you confirm
 
 ## Why it exists
 
@@ -106,11 +106,11 @@ Confidence interpretation:
 
 ### Email a recruiter
 
-On a job with a generated tailored PDF, open the **Apply** tab and click **Apply now** (or use **Email recruiter** in the **More actions** menu). JobOps generates a cover letter from the job and tailored CV, then shows a preview you can edit:
+On a job with a generated tailored PDF, open the **Apply** tab and click **Apply now** (or use **Email recruiter** in the **More actions** menu). JobOps loads the saved cover letter, then shows a preview you can edit. Opening the preview never calls the AI; use **Cover letter** and **Generate** first if you want a new draft.
 
 - **To**: defaults to the `From` address of a matched Tracking Inbox email. If no email is matched, JobOps uses the first valid address from the job's `emails` field and then its job description (including `mailto:` links, HTML entities such as `&#64;`, and `(at)` / `[dot]` obfuscation). If none is found, the field opens empty for you to type the address. The preview labels addresses taken from job details or entered manually so you can verify them. Editable, but only a single plain email address is accepted. No BCC is added.
 - **Cover letter**: editable. Changing it updates the **Message** below automatically.
-- **Subject** and **Message**: editable; the generated cover letter plus a short sign-off is the initial message and is sent as plain text.
+- **Subject** and **Message**: editable; the saved cover letter plus a short sign-off is the initial message and is sent as plain text. If no cover letter is saved, the letter field starts empty and you can type one in the preview.
 - **Preview PDF**: opens the tailored PDF in a popup dialog on the current page.
 - **Attachment**: the tailored PDF already generated for that job. Files over 4 MB are rejected.
 
@@ -137,7 +137,7 @@ There is no auto-send, bulk send, or scheduled send in this version.
 If the job post has no recruiter email, you can still use the generated materials:
 
 - The **Download PDF** action saves the tailored CV as `Mohamed Mseddi Resume {CompanyName}.pdf` (for example, `Mohamed Mseddi Resume Dwareapps.pdf`). The same filename is used for the email attachment when applying through JobOps.
-- The **Cover letter** button (Apply tab) and **Cover letter** button (job page sidebar) open a letter drafted from the job description and tailored resume. Opening the dialog only loads the saved copy; it never calls the AI. Click **Generate** (or **Regenerate**) to create a fresh draft. Review or edit the text, then click **Save** to persist your changes for that job. Choose **Download .txt** to save `Mohamed Mseddi Cover Letter {CompanyName}.txt` or **Download .pdf** to save `Mohamed Mseddi Cover Letter {CompanyName}.pdf`. Both downloads use the text currently in the editor and the same company name as the tailored CV. A saved letter is also reused by the recruiter-email preview.
+- The **Cover letter** button (Apply tab) and **Cover letter** button (job page sidebar) open a letter drafted from the job description and tailored resume. Opening the dialog only loads the saved copy; it never calls the AI. Click **Generate** (or **Regenerate**) to create a fresh draft. Review or edit the text, then click **Save** to persist your changes for that job. Choose **Download .txt** to save `Mohamed Mseddi Cover Letter {CompanyName}.txt` or **Download .pdf** to save `Mohamed Mseddi Cover Letter {CompanyName}.pdf`. Both downloads use the text currently in the editor and the same company name as the tailored CV. A saved letter is also reused by the recruiter-email preview, which opens it without calling the AI.
 
 No email is required or sent when generating, saving, or downloading these files.
 

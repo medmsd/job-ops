@@ -733,7 +733,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
               ) : null}
             </Button>
 
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   size="icon"

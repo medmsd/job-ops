@@ -81,7 +81,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         setSubject(result.subject);
         setCoverLetter(result.coverLetter);
         setBodySuffix(
-          result.body.startsWith(result.coverLetter)
+          result.coverLetter && result.body.startsWith(result.coverLetter)
             ? result.body.slice(result.coverLetter.length)
             : "\n\nKind regards,",
         );
@@ -112,8 +112,19 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     [bodySuffix],
   );
 
+  const recipientReady = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to.trim());
+  const coverLetterReady = coverLetter.trim().length > 0;
+
   const handleSend = React.useCallback(async () => {
-    if (!preview || !confirmed || sending) return;
+    if (
+      !preview ||
+      !confirmed ||
+      !recipientReady ||
+      !coverLetterReady ||
+      sending
+    ) {
+      return;
+    }
     setSending(true);
     setError(null);
     try {
@@ -141,10 +152,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   }, [
     body,
     confirmed,
+    coverLetterReady,
     jobId,
     onOpenChange,
     onSent,
     preview,
+    recipientReady,
     sending,
     subject,
     to,
@@ -167,7 +180,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         {loading && (
           <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Generating cover letter and preparing attachment...
+            Preparing email preview and attachment...
           </div>
         )}
 
@@ -186,6 +199,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 id="recruiter-email-to"
                 value={to}
                 onChange={(event) => setTo(event.target.value)}
+                placeholder="name@company.com"
                 autoComplete="off"
               />
               {preview.recipientSource === "job" && (
@@ -224,6 +238,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 }
                 rows={10}
               />
+              {!coverLetterReady && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No cover letter is saved for this job. Generate one from the
+                  Cover letter dialog or type one above before sending.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Edit the letter here. The email message below stays in sync and
                 is sent as plain text; the CV is attached as a PDF.
@@ -295,7 +315,13 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           </Button>
           <Button
             onClick={() => void handleSend()}
-            disabled={!preview || !confirmed || sending}
+            disabled={
+              !preview ||
+              !confirmed ||
+              !recipientReady ||
+              !coverLetterReady ||
+              sending
+            }
           >
             {sending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -413,7 +413,6 @@ export async function previewRecruiterEmail(input: {
   let messageId: string | null = null;
   let accountKey = GRAPH_ACCOUNT_KEY;
   let recipientSource: "tracked" | "job" | "manual" = "tracked";
-  let sourceSubject = "";
   let to = "";
 
   if (message) {
@@ -427,7 +426,6 @@ export async function previewRecruiterEmail(input: {
     messageId = message.id;
     accountKey =
       message.provider === "graph" ? message.accountKey : GRAPH_ACCOUNT_KEY;
-    sourceSubject = message.subject ?? "";
   } else {
     // No tracked message: fall back to the job's own contact data. If the job
     // has none either, leave the recipient blank for manual entry in the
@@ -452,27 +450,12 @@ export async function previewRecruiterEmail(input: {
     `Application for ${job.title?.trim() || "the role"} - ${candidateName}`,
     200,
   );
-  const savedCoverLetter = job.coverLetter?.trim() ?? "";
-  const coverLetter =
-    savedCoverLetter ||
-    (await generateCoverLetter({
-      jobId: job.id,
-      messages: buildCoverLetterMessages({
-        jobTitle: job.title ?? "",
-        employer: job.employer ?? "",
-        location: job.location ?? "",
-        jobDescription: job.jobDescription ?? "",
-        tailoredHeadline: job.tailoredHeadline ?? "",
-        tailoredSummary: job.tailoredSummary ?? "",
-        tailoredSkills: job.tailoredSkills ?? "",
-        candidateName,
-        recruiterSubject: sourceSubject || subject,
-      }),
-    }));
-  if (!savedCoverLetter) {
-    await jobsRepo.saveJobCoverLetter(job.id, coverLetter);
-  }
-  const body = `${coverLetter.trim()}\n\nKind regards,\n${candidateName}`;
+  // Opening a preview must not invoke the LLM. Use only the cover letter the
+  // user already generated or saved; the client lets them type one if empty.
+  const coverLetter = job.coverLetter?.trim() ?? "";
+  const body = coverLetter
+    ? `${coverLetter}\n\nKind regards,\n${candidateName}`
+    : "";
 
   const stored = createRecruiterEmailPreview({
     jobId: job.id,

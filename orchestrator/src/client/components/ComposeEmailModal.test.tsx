@@ -145,6 +145,59 @@ describe("ComposeEmailModal", () => {
     });
   });
 
+  it("keeps send disabled until a valid manual recipient is entered", async () => {
+    mocks.preview.mockResolvedValueOnce({
+      ...preview,
+      messageId: null,
+      to: "",
+      recipientSource: "manual",
+    });
+
+    render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
+
+    const toInput = await screen.findByLabelText("To");
+    expect(toInput).toHaveAttribute("placeholder", "name@company.com");
+    fireEvent.click(screen.getByRole("checkbox"));
+
+    const sendButton = screen.getByRole("button", { name: /send email/i });
+    expect(sendButton).toBeDisabled();
+
+    fireEvent.change(toInput, { target: { value: "not-an-email" } });
+    expect(sendButton).toBeDisabled();
+
+    fireEvent.change(toInput, {
+      target: { value: "manual.recruiter@example.com" },
+    });
+    expect(sendButton).toBeEnabled();
+  });
+
+  it("warns when no cover letter is saved and requires one before sending", async () => {
+    mocks.preview.mockResolvedValueOnce({
+      ...preview,
+      coverLetter: "",
+      body: "",
+    });
+
+    render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Cover letter")).toHaveValue("");
+    });
+    expect(screen.getByText(/no cover letter is saved/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    const sendButton = screen.getByRole("button", { name: /send email/i });
+    expect(sendButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Cover letter"), {
+      target: { value: "My own letter." },
+    });
+    expect(screen.getByLabelText("Message")).toHaveValue(
+      "My own letter.\n\nKind regards,",
+    );
+    expect(sendButton).toBeEnabled();
+  });
+
   it("sends edited recipient, subject, and body", async () => {
     render(<ComposeEmailModal open onOpenChange={vi.fn()} jobId="job-1" />);
 
