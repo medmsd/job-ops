@@ -175,6 +175,24 @@ Defaults and constraints:
   - resetting restores the shared default templates
 - Existing writing-style, language, and scoring-instructions settings still matter because the default templates consume those values through placeholders
 
+### Career Evidence Bank
+
+Use **Settings → Career Evidence → Evidence Bank** to record verified career facts that AI is allowed to reuse.
+
+- Add target roles, core skills (with years, level, aliases, and evidence refs), and achievements (with a metric and evidence refs).
+- Add terms to **Always include**, **Never claim**, **Preferred terms**, and **Avoid terms**.
+- Evidence refs are stable IDs from Resume Studio, for example `project:payments-platform`. Bank-owned achievements use `bank:<achievement-id>`.
+- A warning lists refs that no longer resolve after a project is deleted or renamed. Saving is never blocked by a dangling ref.
+- Use **Reset to default** to clear the bank.
+
+Defaults and constraints:
+
+- Store facts, not prose. Each skill or achievement should reference at least one Resume Studio item.
+- AI may reorder, emphasize, and rephrase supported facts. It may not create new skills, years, metrics, tools, or seniority.
+- A term in **Never claim** blocks PDF generation if it appears in tailored content.
+- Unsupported claims produce a warning that you must acknowledge before generating a PDF.
+- The bank is private to your workspace (and to your account in hosted mode).
+
 ### Reactive Resume
 
 ![Reactive Resume settings section](/img/features/settings-reactive-resume-section.png)

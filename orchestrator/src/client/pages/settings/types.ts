@@ -1,3 +1,4 @@
+import type { CareerEvidenceBank } from "@shared/types/career-evidence.js";
 import type {
   ChatStyleLanguageMode,
   ChatStyleManualLanguage,
@@ -38,6 +39,8 @@ export type ChatValues = {
   summaryMaxWords: EffectiveDefault<number | null>;
   maxKeywordsPerSkill: EffectiveDefault<number | null>;
 };
+
+export type CareerEvidenceValues = EffectiveDefault<CareerEvidenceBank>;
 
 export type EnvSettingsValues = {
   readable: {

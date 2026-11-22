@@ -20,6 +20,7 @@ import {
 } from "@client/lib/rxresume-config";
 import { BackupSettingsSection } from "@client/pages/settings/components/BackupSettingsSection";
 import { BillingSettingsSection } from "@client/pages/settings/components/BillingSettingsSection";
+import { CareerEvidenceSection } from "@client/pages/settings/components/CareerEvidenceSection";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
 import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
@@ -37,6 +38,7 @@ import {
 } from "@client/pages/settings/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { normalizeStringArray } from "@shared/normalize-string-array.js";
+import { createEmptyCareerEvidenceBank } from "@shared/types/career-evidence.js";
 import {
   type UpdateSettingsInput,
   updateSettingsSchema,
@@ -79,6 +81,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   pipelineWebhookUrl: "",
   jobCompleteWebhookUrl: "",
   resumeProjects: null,
+  careerEvidence: null,
   pdfRenderer: "rxresume",
   typstTheme: "classic",
   pdfPaperSize: "auto",
@@ -131,6 +134,7 @@ const EMPTY_RXRESUME_VALIDATION_BADGE_STATE: RxResumeValidationBadgeState = {
 type SettingsSectionId =
   | "billing"
   | "model"
+  | "career-evidence"
   | "chat"
   | "prompt-templates"
   | "scoring"
@@ -145,6 +149,7 @@ type SettingsSectionId =
 type SettingsGroupId =
   | "account"
   | "ai"
+  | "career"
   | "scoring"
   | "integrations"
   | "workspaces"
@@ -212,6 +217,26 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         description:
           "Base AI instructions for Ghostwriter, tailoring, and scoring.",
         searchTerms: ["prompt", "templates", "system prompt", "instructions"],
+      },
+    ],
+  },
+  {
+    id: "career",
+    label: "Career Evidence",
+    items: [
+      {
+        id: "career-evidence",
+        label: "Evidence Bank",
+        description:
+          "Verified skills, achievements, and claim rules used by AI writing.",
+        searchTerms: [
+          "evidence",
+          "claims",
+          "skills",
+          "achievements",
+          "ats",
+          "never claim",
+        ],
       },
     ],
   },
@@ -344,6 +369,7 @@ const SECTION_FIELD_MAP: Record<
     "tailoringPromptTemplate",
     "scoringPromptTemplate",
   ],
+  "career-evidence": ["careerEvidence"],
   scoring: [
     "penalizeMissingSalary",
     "missingSalaryPenalty",
@@ -438,6 +464,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   pipelineWebhookUrl: null,
   jobCompleteWebhookUrl: null,
   resumeProjects: null,
+  careerEvidence: null,
   pdfRenderer: null,
   typstTheme: null,
   pdfPaperSize: null,
@@ -506,6 +533,8 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   pipelineWebhookUrl: data.pipelineWebhookUrl.override ?? "",
   jobCompleteWebhookUrl: data.jobCompleteWebhookUrl.override ?? "",
   resumeProjects: data.resumeProjects.override,
+  careerEvidence:
+    data.careerEvidence.override ?? data.careerEvidence.value ?? null,
   pdfRenderer: data.pdfRenderer.override ?? data.pdfRenderer.value,
   typstTheme: data.typstTheme.override ?? data.typstTheme.value,
   pdfPaperSize: data.pdfPaperSize.override ?? data.pdfPaperSize.value,
@@ -679,6 +708,12 @@ const getDerivedSettings = (settings: AppSettings | null) => {
         effective: settings?.pdfPaperSize?.value ?? "auto",
         default: settings?.pdfPaperSize?.default ?? "auto",
       },
+    },
+    careerEvidence: {
+      effective:
+        settings?.careerEvidence?.value ?? createEmptyCareerEvidenceBank(),
+      default:
+        settings?.careerEvidence?.default ?? createEmptyCareerEvidenceBank(),
     },
     display: {
       showSponsorInfo: {
@@ -980,6 +1015,7 @@ export const SettingsPage: React.FC = () => {
     pipelineWebhook,
     jobCompleteWebhook,
     reactiveResume,
+    careerEvidence,
     display,
     chat,
     envSettings,
@@ -1238,6 +1274,12 @@ export const SettingsPage: React.FC = () => {
         pipelineWebhookUrl: normalizeString(data.pipelineWebhookUrl),
         jobCompleteWebhookUrl: normalizeString(data.jobCompleteWebhookUrl),
         resumeProjects: resumeProjectsOverride,
+        careerEvidence: (() => {
+          const value = data.careerEvidence ?? createEmptyCareerEvidenceBank();
+          return JSON.stringify(value) === JSON.stringify(careerEvidence.default)
+            ? null
+            : value;
+        })(),
         pdfRenderer: nullIfSame(
           data.pdfRenderer,
           reactiveResume.pdfRenderer.default,
@@ -1679,6 +1721,17 @@ export const SettingsPage: React.FC = () => {
           values={promptTemplates}
           isLoading={isLoading}
           isSaving={isSaving}
+          layoutMode="panel"
+        />
+      );
+      break;
+    case "career-evidence":
+      activeSectionContent = (
+        <CareerEvidenceSection
+          values={careerEvidence}
+          isLoading={isLoading}
+          isSaving={isSaving}
+          profileProjects={effectiveProfileProjects}
           layoutMode="panel"
         />
       );
