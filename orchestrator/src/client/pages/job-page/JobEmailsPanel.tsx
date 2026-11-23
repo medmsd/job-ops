@@ -11,6 +11,7 @@ import {
   MailWarning,
 } from "lucide-react";
 import React from "react";
+import { Link } from "react-router-dom";
 import * as api from "@/client/api";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { queryKeys } from "@/client/lib/queryKeys";
@@ -200,6 +201,9 @@ export const JobEmailsPanel: React.FC<JobEmailsPanelProps> = ({ jobId }) => {
     filter?.matches(item.message.processingStatus),
   );
   const accountLabel = getAccountLabel(items);
+  const pendingCount = items.filter(
+    (item) => item.message.processingStatus === "pending_user",
+  ).length;
 
   return (
     <section className="rounded-xl border border-border/50 bg-card/85">
@@ -227,6 +231,22 @@ export const JobEmailsPanel: React.FC<JobEmailsPanelProps> = ({ jobId }) => {
           </div>
 
           <div className="flex flex-wrap items-center gap-1">
+            {pendingCount > 0 && (
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="h-8 px-2 text-xs"
+              >
+                <Link
+                  to={`/tracking-inbox?jobId=${encodeURIComponent(jobId)}`}
+                  aria-label={`Review ${pendingCount} pending response${pendingCount === 1 ? "" : "s"}`}
+                >
+                  <MailWarning className="mr-1 h-3.5 w-3.5" />
+                  {pendingCount} pending
+                </Link>
+              </Button>
+            )}
             {filterOptions.map((option) => (
               <Button
                 key={option.id}

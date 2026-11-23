@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { showErrorToast } from "@/client/lib/error-toast";
@@ -93,6 +94,8 @@ function formatEpochMs(value?: number | null): string {
 }
 
 export const TrackingInboxPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const jobIdFilter = searchParams.get("jobId")?.trim() ?? "";
   const [provider, setProvider] = useState<PostApplicationProvider>(
     DEFAULT_POST_APPLICATION_PROVIDER,
   );
@@ -163,9 +166,26 @@ export const TrackingInboxPage: React.FC = () => {
   const isRunMessagesLoading =
     runMessagesQuery.isPending || runMessagesQuery.isFetching;
 
+  const visibleInbox = useMemo(
+    () =>
+      jobIdFilter
+        ? inbox.filter((item) => item.message.matchedJobId === jobIdFilter)
+        : inbox,
+    [inbox, jobIdFilter],
+  );
+  const visibleRunItems = useMemo(
+    () =>
+      jobIdFilter
+        ? selectedRunItems.filter(
+            (item) => item.message.matchedJobId === jobIdFilter,
+          )
+        : selectedRunItems,
+    [jobIdFilter, selectedRunItems],
+  );
+
   const hasReviewItems = useMemo(
-    () => inbox.length > 0 || selectedRunItems.length > 0,
-    [inbox.length, selectedRunItems.length],
+    () => visibleInbox.length > 0 || visibleRunItems.length > 0,
+    [visibleInbox.length, visibleRunItems.length],
   );
 
   const appliedJobsQuery = useQuery({
@@ -224,7 +244,7 @@ export const TrackingInboxPage: React.FC = () => {
     setAppliedJobByMessageId((previous) => {
       const next = { ...previous };
       let didChange = false;
-      for (const item of [...inbox, ...selectedRunItems]) {
+      for (const item of [...visibleInbox, ...visibleRunItems]) {
         const selectedJobId = next[item.message.id];
         const hasValidSelection = appliedJobs.some(
           (appliedJob) => appliedJob.id === selectedJobId,
@@ -245,7 +265,7 @@ export const TrackingInboxPage: React.FC = () => {
       }
       return didChange ? next : previous;
     });
-  }, [appliedJobs, inbox, selectedRunItems]);
+  }, [appliedJobs, visibleInbox, visibleRunItems]);
 
   const waitForOauthResult = useCallback(
     (
@@ -539,7 +559,7 @@ export const TrackingInboxPage: React.FC = () => {
 
   const handleInboxAction = useCallback(
     async (action: "approve" | "deny") => {
-      if (inbox.length === 0) return;
+      if (visibleInbox.length === 0) return;
 
       setIsActionLoading(true);
       setInboxActionDialog({ isOpen: false, action: null, itemCount: 0 });
@@ -581,7 +601,7 @@ export const TrackingInboxPage: React.FC = () => {
         trackProductEvent("tracking_inbox_review_action_completed", {
           action,
           context: "main_inbox",
-          item_count: inbox.length,
+          item_count: visibleInbox.length,
           provider,
           result: "error",
         });
@@ -590,15 +610,15 @@ export const TrackingInboxPage: React.FC = () => {
         setIsActionLoading(false);
       }
     },
-    [accountKey, inbox.length, provider, refresh],
+    [accountKey, visibleInbox.length, provider, refresh],
   );
 
   const openInboxActionDialog = useCallback(
     (action: "approve" | "deny") => {
       const eligibleCount =
         action === "approve"
-          ? inbox.filter((item) => item.matchedJob).length
-          : inbox.length;
+          ? visibleInbox.filter((item) => item.matchedJob).length
+          : visibleInbox.length;
 
       if (eligibleCount === 0) {
         toast.error(
@@ -615,7 +635,7 @@ export const TrackingInboxPage: React.FC = () => {
         itemCount: eligibleCount,
       });
     },
-    [inbox],
+    [visibleInbox],
   );
 
   const handleOpenRunMessages = useCallback((run: PostApplicationSyncRun) => {
@@ -660,7 +680,12 @@ export const TrackingInboxPage: React.FC = () => {
     "Failed to load messages for selected sync run",
   );
 
-  const pendingCount = inbox.length;
+  const pendingCount = visibleInbox.length;
+  const jobFilterLabel = jobIdFilter ? (
+    <Badge variant="outline" className="text-[10px]">
+      Filtered to job {jobIdFilter}
+    </Badge>
+  ) : null;
   const isConnected = Boolean(status?.connected);
   const connectionLabel = useMemo(() => {
     if (!status) return "Unknown";
@@ -838,6 +863,7 @@ export const TrackingInboxPage: React.FC = () => {
                 Pending review:{" "}
                 <span className="font-semibold">{pendingCount}</span>
               </span>
+              {jobFilterLabel}
               {status?.integration?.lastSyncedAt ? (
                 <span className="text-muted-foreground">
                   Last synced: {formatEpochMs(status.integration.lastSyncedAt)}
@@ -881,14 +907,14 @@ export const TrackingInboxPage: React.FC = () => {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading inbox...
               </div>
-            ) : inbox.length === 0 ? (
+            ) : visibleInbox.length === 0 ? (
               <EmptyState
                 title="No pending messages"
                 description="Run sync to ingest new job-application emails."
               />
             ) : (
               <EmailViewerList
-                items={inbox}
+                items={visibleInbox}
                 appliedJobs={appliedJobs}
                 appliedJobByMessageId={appliedJobByMessageId}
                 onAppliedJobChange={handleAppliedJobChange}
@@ -1047,13 +1073,13 @@ export const TrackingInboxPage: React.FC = () => {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading run messages...
               </div>
-            ) : selectedRunItems.length === 0 ? (
+            ) : visibleRunItems.length === 0 ? (
               <p className="py-4 text-sm text-muted-foreground">
                 No messages found for this run.
               </p>
             ) : (
               <EmailViewerList
-                items={selectedRunItems}
+                items={visibleRunItems}
                 appliedJobs={appliedJobs}
                 appliedJobByMessageId={appliedJobByMessageId}
                 onAppliedJobChange={handleAppliedJobChange}

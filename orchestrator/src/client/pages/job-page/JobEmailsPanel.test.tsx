@@ -3,6 +3,7 @@ import type {
   PostApplicationMessage,
 } from "@shared/types.js";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "@/client/api";
 import { renderWithQueryClient } from "@/client/test/renderWithQueryClient";
@@ -173,5 +174,42 @@ describe("JobEmailsPanel", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Gmail link unavailable")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /open in gmail/i })).toBeNull();
+  });
+
+  it("links pending responses to the filtered tracking inbox", async () => {
+    vi.mocked(api.getJobEmails).mockResolvedValue({
+      items: [
+        makeItem({
+          message: {
+            id: "pending-1",
+            subject: "Interview invite",
+            processingStatus: "pending_user",
+          },
+          sourceUrl: null,
+          accountDisplayName: "Outlook",
+        }),
+        makeItem({
+          message: {
+            id: "linked-1",
+            subject: "Older update",
+            processingStatus: "manual_linked",
+          },
+          sourceUrl: null,
+          accountDisplayName: "Outlook",
+        }),
+      ],
+      total: 2,
+    });
+
+    renderWithQueryClient(
+      <MemoryRouter>
+        <JobEmailsPanel jobId="job-1" />
+      </MemoryRouter>,
+    );
+
+    const link = await screen.findByRole("link", {
+      name: /review 1 pending response/i,
+    });
+    expect(link).toHaveAttribute("href", "/tracking-inbox?jobId=job-1");
   });
 });

@@ -262,4 +262,40 @@ describe("TrackingInboxPage", () => {
       });
     });
   });
+
+  it("honors the jobId query parameter as an initial read-only filter", async () => {
+    vi.mocked(api.getPostApplicationInbox).mockResolvedValue({
+      items: [
+        {
+          message: {
+            ...makeInboxItem().message,
+            id: "matching",
+            subject: "Matching response",
+            matchedJobId: "job-1",
+          },
+          matchedJob: { id: "job-1", title: "Engineer", employer: "Acme" },
+        },
+        {
+          message: {
+            ...makeInboxItem().message,
+            id: "other",
+            subject: "Other response",
+            matchedJobId: "job-2",
+          },
+          matchedJob: { id: "job-2", title: "Other", employer: "Other Co" },
+        },
+      ],
+      total: 2,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/tracking-inbox?jobId=job-1"]}>
+        <TrackingInboxPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Matching response")).toBeInTheDocument();
+    expect(screen.queryByText("Other response")).not.toBeInTheDocument();
+    expect(screen.getByText(/filtered to job job-1/i)).toBeInTheDocument();
+  });
 });
