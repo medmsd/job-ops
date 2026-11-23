@@ -52,7 +52,9 @@ function requestContextFor(
   return {
     requestId,
     tenantId: integration.tenantId,
-    ...(integration.userId ? { userId: integration.userId } : {}),
+    // Pass the key explicitly so an ambient caller's userId cannot leak in
+    // through runWithRequestContext's spread merge when this scope has none.
+    userId: integration.userId ?? undefined,
   };
 }
 
@@ -83,13 +85,26 @@ export async function runResponseSyncOnce(
   deps: Partial<ResponseSyncDeps> = {},
 ): Promise<ResponseSyncSummary> {
   const resolved: ResponseSyncDeps = { ...defaultDeps, ...deps };
-  const integrations = await resolved.listIntegrations();
   const summary: ResponseSyncSummary = {
     attempted: 0,
     succeeded: 0,
     failed: 0,
     skipped: 0,
   };
+
+  let integrations: SchedulerIntegrationScope[];
+  try {
+    integrations = await resolved.listIntegrations();
+  } catch (error) {
+    // Enumeration runs on bare `void` timer callbacks; never let a transient
+    // DB failure reject into an unhandled rejection that could kill the process.
+    resolved.log.warn("Response sync enumeration failed", {
+      status: "failed",
+      error: errorMessage(error),
+    });
+    return summary;
+  }
+
   const tasks: Promise<void>[] = [];
 
   for (const integration of integrations) {

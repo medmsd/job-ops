@@ -25,12 +25,6 @@ const SCOPE_A = {
   provider: "graph" as const,
   accountKey: "default",
 };
-const SCOPE_B = {
-  tenantId: "tenant-b",
-  userId: "user-b",
-  provider: "gmail" as const,
-  accountKey: "default",
-};
 
 function okResult(
   provider: "graph" | "gmail",
@@ -193,6 +187,26 @@ describe("response sync scheduler", () => {
         provider: "graph",
         error: expect.any(String),
       }),
+    );
+  });
+
+  it("does not reject when integration enumeration fails", async () => {
+    mocks.warn.mockClear();
+    const summary = await scheduler.runResponseSyncOnce({
+      listIntegrations: async () => {
+        throw new Error("database is locked");
+      },
+    });
+
+    expect(summary).toEqual({
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+    });
+    expect(mocks.warn).toHaveBeenCalledWith(
+      "Response sync enumeration failed",
+      expect.objectContaining({ status: "failed", error: expect.any(String) }),
     );
   });
 
