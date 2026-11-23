@@ -1,5 +1,9 @@
 import * as api from "@client/api";
-import type { Job } from "@shared/types.js";
+import type {
+  DesignResumeJson,
+  Job,
+  TailoredResumeSnapshot,
+} from "@shared/types.js";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@client/api", () => ({
   approveTailoredSnapshot: vi.fn(),
+  generateDesignResumeFieldSuggestion: vi.fn(),
   generateJobPdf: vi.fn().mockResolvedValue({}),
   getCurrentTailoredSnapshot: vi.fn(),
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
@@ -21,6 +26,30 @@ vi.mock("@client/api", () => ({
   saveTailoredSnapshot: vi.fn(),
   summarizeJob: vi.fn(),
   updateJob: vi.fn().mockImplementation(async (_id, payload) => payload),
+}));
+
+vi.mock("@client/api/settings-profile", () => ({
+  getDesignResumeAssetContentBlob: vi.fn(),
+}));
+
+vi.mock("../design-resume/DesignResumeFieldAssistant", () => ({
+  DesignResumeFieldAssistant: () => null,
+}));
+
+vi.mock("../design-resume/RichTextEditor", () => ({
+  RichTextEditor: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (next: string) => void;
+  }) => (
+    <textarea
+      aria-label="Rich text content"
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+    />
+  ),
 }));
 
 vi.mock("@client/hooks/useProfile", () => ({
@@ -96,12 +125,221 @@ const makeJob = (overrides: Partial<Job> = {}): Job =>
     selectedProjectIds: "",
     tracerLinksEnabled: false,
     pdfPath: "data/pdfs/job-1.pdf",
+    tailoredResumeSnapshotId: "snapshot-1",
+    tailoredResumeVersion: 1,
     ...overrides,
   }) as Job;
 
 const generatedSkills = JSON.stringify([
   { name: "Backend", keywords: ["Java"] },
 ]);
+
+const snapshotResumeJson = {
+  basics: {
+    name: "Mohamed Mseddi",
+    headline: "Saved headline",
+    email: "candidate@example.com",
+    phone: "",
+    location: "",
+    website: { url: "" },
+  },
+  summary: { content: "<p>Saved summary</p>" },
+  sections: {
+    skills: {
+      items: [{ id: "skill-1", name: "Backend", keywords: ["Java"] }],
+    },
+  },
+} as unknown as DesignResumeJson;
+
+const makeSnapshot = (
+  overrides: Partial<TailoredResumeSnapshot> = {},
+): TailoredResumeSnapshot =>
+  ({
+    id: "snapshot-1",
+    jobId: "job-1",
+    version: 1,
+    status: "approved",
+    origin: "approved",
+    resumeJson: snapshotResumeJson,
+    changes: [
+      {
+        path: "basics.headline",
+        label: "Headline",
+        kind: "changed",
+        before: "Base headline",
+        after: "Saved headline",
+      },
+    ],
+    ats: null,
+    model: null,
+    baseResumeDocumentId: null,
+    baseResumeRevision: null,
+    generatedAt: 1,
+    createdAt: "2026-11-22T10:00:00.000Z",
+    updatedAt: "2026-11-22T10:00:00.000Z",
+    ...overrides,
+  }) as TailoredResumeSnapshot;
+
+const mockSnapshot = makeSnapshot();
+
+describe("TailoringWorkspace snapshots", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.getCurrentTailoredSnapshot).mockResolvedValue(mockSnapshot);
+    vi.mocked(api.getTailoredSnapshots).mockResolvedValue([mockSnapshot]);
+    vi.mocked(api.approveTailoredSnapshot).mockResolvedValue(mockSnapshot);
+    vi.mocked(api.saveTailoredSnapshot).mockResolvedValue(mockSnapshot);
+    vi.mocked(api.restoreTailoredSnapshot).mockResolvedValue(mockSnapshot);
+    vi.mocked(api.getResumeProjectsCatalog).mockResolvedValue([]);
+    vi.mocked(api.updateJob).mockResolvedValue(makeJob());
+  });
+
+  it("does not call AI or snapshot approval on open", () => {
+    render(
+      <TailoringWorkspace
+        mode="editor"
+        job={makeJob({ tailoredSkills: generatedSkills })}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(api.summarizeJob).not.toHaveBeenCalled();
+    expect(api.approveTailoredSnapshot).not.toHaveBeenCalled();
+    expect(api.generateDesignResumeFieldSuggestion).not.toHaveBeenCalled();
+    expect(api.getCurrentTailoredSnapshot).toHaveBeenCalledWith("job-1");
+    expect(api.getTailoredSnapshots).toHaveBeenCalledWith("job-1");
+  });
+
+  it("only offers Approve snapshot when the job has a description", async () => {
+    vi.mocked(api.getCurrentTailoredSnapshot).mockResolvedValue(null);
+    const withoutDescription = makeJob({
+      jobDescription: null,
+      tailoredSkills: generatedSkills,
+      tailoredResumeSnapshotId: null,
+      tailoredResumeVersion: null,
+    });
+    const { rerender } = render(
+      <TailoringWorkspace
+        mode="editor"
+        job={withoutDescription}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /approve snapshot/i }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <TailoringWorkspace
+        mode="editor"
+        job={makeJob({
+          tailoredSkills: generatedSkills,
+          tailoredResumeSnapshotId: null,
+          tailoredResumeVersion: null,
+        })}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    const approveButton = await screen.findByRole("button", {
+      name: /approve snapshot/i,
+    });
+    await waitFor(() => expect(approveButton).toBeEnabled());
+    fireEvent.click(approveButton);
+
+    await waitFor(() => {
+      expect(api.approveTailoredSnapshot).toHaveBeenCalledTimes(1);
+      expect(api.approveTailoredSnapshot).toHaveBeenCalledWith("job-1");
+    });
+  });
+
+  it("gates Generate PDF on the current approved snapshot and version", async () => {
+    const { unmount } = render(
+      <TailoringWorkspace
+        mode="editor"
+        job={makeJob({
+          tailoredSkills: generatedSkills,
+          tailoredResumeSnapshotId: null,
+          tailoredResumeVersion: null,
+        })}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    const blockedButton = await screen.findByRole("button", {
+      name: /generate pdf/i,
+    });
+    expect(blockedButton).toBeDisabled();
+    expect(
+      await screen.findByText(
+        "Approve a tailored CV snapshot before generating a PDF.",
+      ),
+    ).toBeInTheDocument();
+    unmount();
+
+    render(
+      <TailoringWorkspace
+        mode="editor"
+        job={makeJob({ tailoredSkills: generatedSkills })}
+        onUpdate={vi.fn()}
+      />,
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /generate pdf/i }),
+      ).toBeEnabled();
+    });
+  });
+
+  it("opens the full CV editor and saves edits as a new version", async () => {
+    const updated = makeSnapshot({
+      id: "snapshot-2",
+      version: 2,
+      resumeJson: {
+        ...snapshotResumeJson,
+        basics: {
+          ...snapshotResumeJson.basics,
+          headline: "Edited headline",
+        },
+      } as unknown as DesignResumeJson,
+    });
+    vi.mocked(api.saveTailoredSnapshot).mockResolvedValue(updated);
+    vi.mocked(api.getTailoredSnapshots).mockResolvedValue([
+      updated,
+      mockSnapshot,
+    ]);
+
+    render(
+      <TailoringWorkspace
+        mode="editor"
+        job={makeJob({ tailoredSkills: generatedSkills })}
+        onUpdate={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /open full tailored cv/i }),
+    );
+
+    expect(await screen.findByText("Changes from baseline")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Headline"), {
+      target: { value: "Edited headline" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save edits/i }));
+
+    await waitFor(() => {
+      expect(api.saveTailoredSnapshot).toHaveBeenCalledWith(
+        "job-1",
+        "snapshot-1",
+        expect.objectContaining({
+          basics: expect.objectContaining({ headline: "Edited headline" }),
+        }),
+      );
+    });
+    expect(api.summarizeJob).not.toHaveBeenCalled();
+    expect(api.generateDesignResumeFieldSuggestion).not.toHaveBeenCalled();
+  });
+});
 
 describe("TailoringWorkspace PDF preview", () => {
   beforeEach(() => {
@@ -311,6 +549,8 @@ describe("TailoringWorkspace evidence review", () => {
     mocks.sectionProps.current = null;
     vi.mocked(api.updateJob).mockResolvedValue(readyJob());
     vi.mocked(api.getResumeProjectsCatalog).mockResolvedValue([]);
+    vi.mocked(api.getCurrentTailoredSnapshot).mockResolvedValue(mockSnapshot);
+    vi.mocked(api.getTailoredSnapshots).mockResolvedValue([mockSnapshot]);
     vi.mocked(api.getTailoringPlan).mockResolvedValue(
       planResult({ blocked: [], unsupported: [] }) as never,
     );
@@ -323,6 +563,8 @@ describe("TailoringWorkspace evidence review", () => {
 
     expect(api.summarizeJob).not.toHaveBeenCalled();
     expect(api.getTailoringPlan).not.toHaveBeenCalled();
+    expect(api.approveTailoredSnapshot).not.toHaveBeenCalled();
+    expect(api.generateDesignResumeFieldSuggestion).not.toHaveBeenCalled();
   });
 
   it("loads a plan only after the explicit Check evidence action", async () => {
@@ -369,9 +611,9 @@ describe("TailoringWorkspace evidence review", () => {
     render(
       <TailoringWorkspace mode="editor" job={readyJob()} onUpdate={vi.fn()} />,
     );
-    expect(
-      screen.getByRole("button", { name: /generate pdf/i }),
-    ).toBeEnabled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /generate pdf/i })).toBeEnabled();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "check evidence" }));
     await waitFor(() => {

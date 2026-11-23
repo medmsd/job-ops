@@ -4,12 +4,17 @@ import { useSettings } from "@client/hooks/useSettings";
 import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
-import type { Job, TailoringPlanResult } from "@shared/types.js";
+import type {
+  Job,
+  TailoredResumeSnapshot,
+  TailoringPlanResult,
+} from "@shared/types.js";
 import { CHAT_STYLE_MANUAL_LANGUAGE_LABELS } from "@shared/types.js";
 import {
   Check,
   CircleAlert,
   Eye,
+  FileEdit,
   FileText,
   Loader2,
   RefreshCcw,
@@ -25,6 +30,12 @@ import { showErrorToast } from "@/client/lib/error-toast";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   fromEditableSkillGroups,
   getOriginalHeadline,
   getOriginalSkills,
@@ -34,6 +45,7 @@ import {
   toEditableSkillGroups,
 } from "../tailoring-utils";
 import { getTailoringReadiness } from "./rules";
+import { TailoredCvEditor } from "./TailoredCvEditor";
 import { TailoringRulesStrip } from "./TailoringRulesStrip";
 import type {
   TailoringBaseline,
@@ -184,6 +196,11 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   const [generateTarget, setGenerateTarget] =
     useState<TailoringGenerateTarget | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [snapshot, setSnapshot] = useState<TailoredResumeSnapshot | null>(null);
+  const [versions, setVersions] = useState<TailoredResumeSnapshot[]>([]);
+  const [isCvEditorOpen, setIsCvEditorOpen] = useState(false);
+  const [isApprovingSnapshot, setIsApprovingSnapshot] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
   const saveAgainRef = useRef(false);
@@ -230,6 +247,33 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     setPlan(null);
     setCheckedText(null);
     setEvidenceAcknowledged(false);
+  }, [props.job.id]);
+
+  // Tailored CV snapshots are loaded on job change only; a stale response must
+  // never overwrite the state of a more recently opened job.
+  useEffect(() => {
+    let cancelled = false;
+    setSnapshot(null);
+    setVersions([]);
+    setIsCvEditorOpen(false);
+    setSnapshotError(null);
+    Promise.all([
+      api.getCurrentTailoredSnapshot(props.job.id),
+      api.getTailoredSnapshots(props.job.id),
+    ])
+      .then(([currentSnapshot, snapshotVersions]) => {
+        if (cancelled) return;
+        setSnapshot(currentSnapshot);
+        setVersions(snapshotVersions ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSnapshotError("Unable to load tailored CV versions.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [props.job.id]);
 
   // Any edit invalidates a previous acknowledgment; re-check before generating.
@@ -598,6 +642,50 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     }
   }, [props.onBeforeGenerate, props.onUpdate, flushAutosave, props.job.id]);
 
+  const handleApproveSnapshot = useCallback(async () => {
+    if (!props.job.jobDescription?.trim() || isApprovingSnapshot) return;
+    setSnapshotError(null);
+    setIsApprovingSnapshot(true);
+    try {
+      await flushAutosave();
+      const approved = await api.approveTailoredSnapshot(props.job.id);
+      const refreshedVersions = await api.getTailoredSnapshots(props.job.id);
+      setSnapshot(approved);
+      setVersions(refreshedVersions ?? []);
+      toast.success(`Tailored CV snapshot v${approved.version} approved`);
+      await props.onUpdate();
+    } catch (error) {
+      setSnapshotError("Unable to approve the tailored CV snapshot.");
+      showErrorToast(error, "Approval failed");
+    } finally {
+      setIsApprovingSnapshot(false);
+    }
+  }, [flushAutosave, isApprovingSnapshot, props.job.id, props.job.jobDescription, props.onUpdate]);
+
+  const handleSnapshotSaved = useCallback(
+    async (
+      saved: TailoredResumeSnapshot,
+      refreshedVersions: TailoredResumeSnapshot[],
+    ) => {
+      setSnapshot(saved);
+      setVersions(refreshedVersions ?? []);
+      await props.onUpdate();
+    },
+    [props.onUpdate],
+  );
+
+  const handleSnapshotRestored = useCallback(
+    async (
+      restored: TailoredResumeSnapshot,
+      refreshedVersions: TailoredResumeSnapshot[],
+    ) => {
+      setSnapshot(restored);
+      setVersions(refreshedVersions ?? []);
+      await props.onUpdate();
+    },
+    [props.onUpdate],
+  );
+
   const handlePreviewPdf = useCallback(() => {
     if (!props.job.pdfPath || isGeneratingPdf) return;
     openJobPdf(
@@ -817,11 +905,20 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   const hasNeverClaimBlocker = (evidenceCheck?.blocked.length ?? 0) > 0;
   const hasUnsupportedClaims = (evidenceCheck?.unsupported.length ?? 0) > 0;
   const requiresAcknowledgment = !hasNeverClaimBlocker && hasUnsupportedClaims;
-  const canGeneratePdf =
-    isDraftReady &&
+  const evidenceGateSatisfied =
     !evidenceCheckStale &&
     !hasNeverClaimBlocker &&
     (!requiresAcknowledgment || evidenceAcknowledged);
+  const snapshotIsCurrent = Boolean(
+    snapshot &&
+      props.job.tailoredResumeSnapshotId === snapshot.id &&
+      props.job.tailoredResumeVersion === snapshot.version &&
+      autosaveStatus === "saved",
+  );
+  const canGeneratePdf =
+    isDraftReady && evidenceGateSatisfied && snapshotIsCurrent;
+  const showSnapshotGateMessage =
+    !snapshotIsCurrent && isDraftReady && evidenceGateSatisfied;
   const showEvidenceGate = Boolean(
     evidenceCheck &&
       !evidenceCheckStale &&
@@ -1023,20 +1120,69 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
             )}
             Generate all
           </Button>
-          <Button
-            onClick={handleGeneratePdf}
-            disabled={
-              Boolean(generateTarget) || isGeneratingPdf || !canGeneratePdf
-            }
-            size="sm"
-          >
-            {isGeneratingPdf ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="h-4 w-4" />
-            )}
-            Generate PDF
-          </Button>
+          <div className="grid gap-1">
+            <Button
+              onClick={handleGeneratePdf}
+              disabled={
+                Boolean(generateTarget) || isGeneratingPdf || !canGeneratePdf
+              }
+              size="sm"
+            >
+              {isGeneratingPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              Generate PDF
+            </Button>
+            {showSnapshotGateMessage ? (
+              <p className="text-[11px] leading-4 text-amber-300/90">
+                Approve a tailored CV snapshot before generating a PDF.
+              </p>
+            ) : null}
+          </div>
+          {props.job.jobDescription?.trim() ? (
+            <Button
+              onClick={() => void handleApproveSnapshot()}
+              disabled={
+                !tailoringReadiness.canGeneratePdf ||
+                Boolean(generateTarget) ||
+                isGeneratingPdf ||
+                isApprovingSnapshot ||
+                Boolean(evidenceCheck?.blocked.length)
+              }
+              variant="outline"
+              size="sm"
+            >
+              {isApprovingSnapshot ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileEdit className="mr-2 h-4 w-4" />
+              )}
+              {snapshot ? "Update snapshot" : "Approve snapshot"}
+            </Button>
+          ) : null}
+          {snapshot ? (
+            <>
+              <Button
+                onClick={() => setIsCvEditorOpen(true)}
+                disabled={autosaveStatus !== "saved"}
+                variant="outline"
+                size="sm"
+              >
+                <FileEdit className="mr-2 h-4 w-4" />
+                Open full tailored CV
+              </Button>
+              <span className="self-center rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-center text-[11px] text-muted-foreground">
+                v{snapshot.version}
+              </span>
+            </>
+          ) : null}
+          {snapshotError ? (
+            <output className="text-[11px] leading-4 text-rose-300">
+              {snapshotError}
+            </output>
+          ) : null}
           {props.job.pdfPath && (
             <Button
               onClick={handlePreviewPdf}
@@ -1117,6 +1263,23 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       )}
 
       <TailoringSections {...tailoringSectionsProps} />
+
+      <Dialog open={isCvEditorOpen} onOpenChange={setIsCvEditorOpen}>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tailored CV — {props.job.title}</DialogTitle>
+          </DialogHeader>
+          {snapshot && (
+            <TailoredCvEditor
+              jobId={props.job.id}
+              snapshot={snapshot}
+              versions={versions}
+              onSaved={handleSnapshotSaved}
+              onRestored={handleSnapshotRestored}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
