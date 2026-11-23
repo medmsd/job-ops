@@ -22,13 +22,17 @@ import {
 import { uploadJobPdf } from "@server/services/job-pdf-upload";
 import { getProfile } from "@server/services/profile";
 import {
+  computeTailoredFit,
+  getTailoredFitState,
+} from "@server/services/tailored-fit";
+import {
   approveSnapshot,
   restoreSnapshot,
   saveSnapshotEdit,
 } from "@server/services/tailored-resume";
 import { generateTailoringPlan } from "@server/services/tailoring-plan";
 import { getSafeInlineJobDocumentMediaType } from "@shared/job-document-classification.js";
-import type { DesignResumeJson } from "@shared/types";
+import type { DesignResumeJson, TailoredFitState } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 import {
@@ -532,6 +536,38 @@ jobsDocumentsRouter.post(
   },
 );
 
+jobsDocumentsRouter.get("/:id/tailored-fit", async (req, res) => {
+  try {
+    const job = await requireJob(req.params.id);
+    const state: TailoredFitState = await getTailoredFitState(job);
+    ok(res, state);
+  } catch (error) {
+    fail(res, toJobsRouteError(error));
+  }
+});
+
+jobsDocumentsRouter.post("/:id/tailored-fit", async (req, res) => {
+  try {
+    const job = await requireJob(req.params.id);
+    if (!job.jobDescription?.trim()) {
+      return fail(
+        res,
+        badRequest("Add a job description before checking tailored fit."),
+      );
+    }
+    const updated = await computeTailoredFit(job);
+    logger.info("Tailored fit computed", {
+      route: "POST /api/jobs/:id/tailored-fit",
+      jobId: job.id,
+      requestId: getRequestId(),
+      score: updated.tailoredFitScore,
+    });
+    ok(res, await hydrateJobPdfFreshness(updated));
+  } catch (error) {
+    fail(res, toJobsRouteError(error));
+  }
+});
+
 jobsDocumentsRouter.get("/:id/tailored-snapshots/current", async (req, res) => {
   try {
     await requireJob(req.params.id);
@@ -550,30 +586,33 @@ jobsDocumentsRouter.get("/:id/tailored-snapshots", async (req, res) => {
   }
 });
 
-jobsDocumentsRouter.post("/:id/tailored-snapshots/approve", async (req, res) => {
-  try {
-    const job = await requireJob(req.params.id);
-    if (!job.jobDescription?.trim()) {
-      return fail(
-        res,
-        badRequest("Add a job description before approving a tailored CV."),
-      );
+jobsDocumentsRouter.post(
+  "/:id/tailored-snapshots/approve",
+  async (req, res) => {
+    try {
+      const job = await requireJob(req.params.id);
+      if (!job.jobDescription?.trim()) {
+        return fail(
+          res,
+          badRequest("Add a job description before approving a tailored CV."),
+        );
+      }
+      const snapshot = await approveSnapshot(job.id, {
+        requestOrigin: resolveRequestOrigin(req),
+      });
+      logger.info("Tailored CV snapshot approved", {
+        route: "POST /api/jobs/:id/tailored-snapshots/approve",
+        jobId: job.id,
+        requestId: getRequestId(),
+        snapshotId: snapshot.id,
+        version: snapshot.version,
+      });
+      ok(res, snapshot, 201);
+    } catch (error) {
+      fail(res, toJobsRouteError(error));
     }
-    const snapshot = await approveSnapshot(job.id, {
-      requestOrigin: resolveRequestOrigin(req),
-    });
-    logger.info("Tailored CV snapshot approved", {
-      route: "POST /api/jobs/:id/tailored-snapshots/approve",
-      jobId: job.id,
-      requestId: getRequestId(),
-      snapshotId: snapshot.id,
-      version: snapshot.version,
-    });
-    ok(res, snapshot, 201);
-  } catch (error) {
-    fail(res, toJobsRouteError(error));
-  }
-});
+  },
+);
 
 jobsDocumentsRouter.patch(
   "/:id/tailored-snapshots/:snapshotId",

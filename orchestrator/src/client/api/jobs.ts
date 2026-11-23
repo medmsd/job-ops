@@ -21,6 +21,7 @@ import type {
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
+  TailoredFitState,
   TailoredResumeSnapshot,
   TailoringPlanResult,
   TracerAnalyticsResponse,
@@ -391,10 +392,20 @@ export async function getTailoringPlan(
   });
 }
 
+export async function getTailoredFit(jobId: string): Promise<TailoredFitState> {
+  return fetchApi<TailoredFitState>(`/jobs/${jobId}/tailored-fit`);
+}
+
+export async function computeTailoredFit(jobId: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${jobId}/tailored-fit`, { method: "POST" });
+}
+
 export async function getTailoredSnapshots(
   jobId: string,
 ): Promise<TailoredResumeSnapshot[]> {
-  return fetchApi<TailoredResumeSnapshot[]>(`/jobs/${jobId}/tailored-snapshots`);
+  return fetchApi<TailoredResumeSnapshot[]>(
+    `/jobs/${jobId}/tailored-snapshots`,
+  );
 }
 
 export async function getCurrentTailoredSnapshot(
