@@ -8,10 +8,11 @@
  */
 
 import { join } from "node:path";
-import type { AppErrorCode } from "@infra/errors";
+import { type AppErrorCode, conflict } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { trackServerProductEvent } from "@infra/product-analytics";
 import { runWithRequestContext } from "@infra/request-context";
+import * as tailoredResumesRepo from "@server/repositories/tailored-resumes";
 import { getPrivateDataScope } from "@server/tenancy/private-scope";
 import { createLocationIntentFromLegacyInputs } from "@shared/location-domain.js";
 import { resolveResumeProjectSelection } from "@shared/resume-projects";
@@ -1016,6 +1017,22 @@ export async function generateFinalPdf(
       }
       pdfRegeneratingMarked = true;
 
+      let approvedResumeData: Record<string, unknown> | null = null;
+      if (job.tailoredResumeSnapshotId) {
+        const snapshot = await tailoredResumesRepo.getById(
+          job.tailoredResumeSnapshotId,
+        );
+        if (!snapshot) {
+          throw conflict(
+            "The approved tailored CV is no longer available. Approve a new snapshot before generating a PDF.",
+          );
+        }
+        approvedResumeData = snapshot.resumeJson as unknown as Record<
+          string,
+          unknown
+        >;
+      }
+
       const pdfResult = await generatePdf(
         job.id,
         {
@@ -1030,6 +1047,7 @@ export async function generateFinalPdf(
           tracerLinksEnabled: job.tracerLinksEnabled,
           requestOrigin: options?.requestOrigin ?? null,
           tracerCompanyName: job.employer ?? null,
+          approvedResumeData,
         },
       );
 

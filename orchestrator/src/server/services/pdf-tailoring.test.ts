@@ -923,4 +923,70 @@ describe("PDF Service Tailoring Logic", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("renders the approved snapshot without re-running tailoring", async () => {
+    const approvedResumeData = structuredClone(mockProfile);
+    approvedResumeData.summary.content = "Approved Snapshot Summary";
+    approvedResumeData.basics.headline = "Approved Snapshot Headline";
+    const rxresume = await import("./rxresume");
+
+    const result = await generatePdf(
+      "job-approved-snapshot",
+      { summary: "Injected Summary", headline: "Injected Headline" },
+      "desc",
+      undefined,
+      "p2",
+      {
+        approvedResumeData:
+          approvedResumeData as unknown as Record<string, unknown>,
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(rxresume.prepareTailoredResumeForPdf).not.toHaveBeenCalled();
+    expect(mockResumeRenderer.getLastResumeJson()).toMatchObject({
+      basics: { headline: "Approved Snapshot Headline" },
+      summary: { content: "Approved Snapshot Summary" },
+    });
+  });
+
+  it("returns a failed result for invalid approved snapshot data", async () => {
+    const rxresume = await import("./rxresume");
+
+    const result = await generatePdf(
+      "job-invalid-snapshot",
+      {},
+      "desc",
+      undefined,
+      undefined,
+      {
+        approvedResumeData: {
+          ...mockProfile,
+          summary: "not-a-summary-object",
+        } as unknown as Record<string, unknown>,
+      },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBeDefined();
+    expect(rxresume.prepareTailoredResumeForPdf).not.toHaveBeenCalled();
+    expect(mockResumeRenderer.renderResumePdf).not.toHaveBeenCalled();
+  });
+
+  it("keeps in-memory tailoring when no approved snapshot is supplied", async () => {
+    const rxresume = await import("./rxresume");
+
+    const result = await generatePdf(
+      "job-no-snapshot",
+      { summary: "Fresh Summary", headline: "Fresh Headline" },
+      "desc",
+    );
+
+    expect(result.success).toBe(true);
+    expect(rxresume.prepareTailoredResumeForPdf).toHaveBeenCalledTimes(1);
+    expect(mockResumeRenderer.getLastResumeJson()).toMatchObject({
+      basics: { headline: "Fresh Headline" },
+      summary: { content: "Fresh Summary" },
+    });
+  });
 });

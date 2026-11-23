@@ -60,6 +60,7 @@ export interface GeneratePdfOptions {
   tracerLinksEnabled?: boolean;
   requestOrigin?: string | null;
   tracerCompanyName?: string | null;
+  approvedResumeData?: Record<string, unknown> | null;
 }
 
 async function ensureOutputDir(): Promise<void> {
@@ -373,25 +374,38 @@ export async function generatePdf(
     let preparedResume: Awaited<
       ReturnType<typeof prepareTailoredResumeForPdf>
     > | null = null;
-    try {
-      preparedResume = await prepareTailoredResumeForPdf({
-        resumeData: baseResume.data,
-        tailoredContent,
-        jobDescription,
-        selectedProjectIds,
-        jobId,
-        tracerLinks: {
-          enabled: Boolean(options?.tracerLinksEnabled),
-          requestOrigin: options?.requestOrigin ?? null,
-          companyName: options?.tracerCompanyName ?? null,
-        },
-      });
-    } catch (err) {
-      logger.warn("Resume tailoring step failed during PDF generation", {
-        jobId,
-        error: err,
-      });
-      throw err;
+    if (options?.approvedResumeData) {
+      const approvedData = parseV5ResumeData(
+        options.approvedResumeData,
+      ) as Record<string, unknown>;
+      preparedResume = {
+        mode: "v5",
+        data: approvedData,
+        projectCatalog: [],
+        selectedProjectIds: [],
+      };
+      logger.info("Rendering PDF from approved tailored snapshot", { jobId });
+    } else {
+      try {
+        preparedResume = await prepareTailoredResumeForPdf({
+          resumeData: baseResume.data,
+          tailoredContent,
+          jobDescription,
+          selectedProjectIds,
+          jobId,
+          tracerLinks: {
+            enabled: Boolean(options?.tracerLinksEnabled),
+            requestOrigin: options?.requestOrigin ?? null,
+            companyName: options?.tracerCompanyName ?? null,
+          },
+        });
+      } catch (err) {
+        logger.warn("Resume tailoring step failed during PDF generation", {
+          jobId,
+          error: err,
+        });
+        throw err;
+      }
     }
 
     const outputPath = getTenantJobPdfPath(jobId);

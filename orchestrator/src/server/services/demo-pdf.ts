@@ -1,5 +1,7 @@
+import { conflict } from "@infra/errors";
 import { DEMO_PROJECT_CATALOG } from "@server/config/demo-defaults";
 import * as jobsRepo from "@server/repositories/jobs";
+import * as tailoredResumesRepo from "@server/repositories/tailored-resumes";
 import { replaceCurrentDesignResumeDocument } from "@server/services/design-resume";
 import { generatePdf, type TailoredPdfContent } from "@server/services/pdf";
 import {
@@ -186,6 +188,22 @@ export async function persistDemoGeneratedPdf(
     await seedDemoDesignResume();
   }
 
+  let approvedResumeData: Record<string, unknown> | null = null;
+  if (job.tailoredResumeSnapshotId) {
+    const snapshot = await tailoredResumesRepo.getById(
+      job.tailoredResumeSnapshotId,
+    );
+    if (!snapshot) {
+      throw conflict(
+        "The approved tailored CV is no longer available. Approve a new snapshot before generating a PDF.",
+      );
+    }
+    approvedResumeData = snapshot.resumeJson as unknown as Record<
+      string,
+      unknown
+    >;
+  }
+
   const result = await generatePdf(
     job.id,
     buildTailoredPdfContent(job),
@@ -196,6 +214,7 @@ export async function persistDemoGeneratedPdf(
       tracerLinksEnabled: job.tracerLinksEnabled,
       tracerCompanyName: job.employer ?? null,
       requestOrigin: null,
+      approvedResumeData,
     },
   );
 
