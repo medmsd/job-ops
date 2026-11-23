@@ -1118,6 +1118,8 @@ export const postApplicationSentEmails = sqliteTable(
     toAddress: text("to_address").notNull(),
     subject: text("subject").notNull(),
     messageId: text("message_id"),
+    graphMessageId: text("graph_message_id"),
+    internetMessageId: text("internet_message_id"),
     status: text("status", { enum: POST_APPLICATION_SENT_EMAIL_STATUSES })
       .notNull()
       .default("sent"),
@@ -1134,6 +1136,12 @@ export const postApplicationSentEmails = sqliteTable(
       table.userId,
       table.jobId,
     ),
+    internetMessageIdIndex: index(
+      "idx_post_app_sent_emails_provider_internet_message_id",
+    ).on(table.provider, table.internetMessageId),
+    graphMessageIdIndex: index(
+      "idx_post_app_sent_emails_provider_graph_message_id",
+    ).on(table.provider, table.graphMessageId),
   }),
 );
 

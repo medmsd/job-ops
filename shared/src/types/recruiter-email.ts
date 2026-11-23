@@ -57,6 +57,10 @@ export interface PostApplicationSentEmail {
   toAddress: string;
   subject: string;
   messageId: string | null;
+  /** Graph message id returned when the recruiter-email draft was created. */
+  graphMessageId: string | null;
+  /** RFC 5322 internetMessageId returned by Graph for the sent message. */
+  internetMessageId: string | null;
   status: PostApplicationSentEmailStatus;
   errorCode: string | null;
   errorMessage: string | null;

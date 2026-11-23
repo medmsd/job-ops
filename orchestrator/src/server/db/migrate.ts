@@ -819,6 +819,8 @@ const migrations = [
     to_address TEXT NOT NULL,
     subject TEXT NOT NULL,
     message_id TEXT,
+    graph_message_id TEXT,
+    internet_message_id TEXT,
     status TEXT NOT NULL DEFAULT 'sent' CHECK(status IN ('sent', 'failed')),
     error_code TEXT,
     error_message TEXT,
@@ -832,6 +834,13 @@ const migrations = [
 
   `CREATE INDEX IF NOT EXISTS idx_post_app_sent_emails_job_id
     ON post_application_sent_emails(job_id)`,
+
+  `ALTER TABLE post_application_sent_emails ADD COLUMN graph_message_id TEXT`,
+  `ALTER TABLE post_application_sent_emails ADD COLUMN internet_message_id TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_post_app_sent_emails_provider_internet_message_id
+    ON post_application_sent_emails(provider, internet_message_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_post_app_sent_emails_provider_graph_message_id
+    ON post_application_sent_emails(provider, graph_message_id)`,
 
   `CREATE TABLE IF NOT EXISTS tracer_links (
     id TEXT PRIMARY KEY,
@@ -1381,6 +1390,9 @@ for (const migration of migrations) {
         migration
           .toLowerCase()
           .includes("alter table job_chat_threads add column") ||
+        migration
+          .toLowerCase()
+          .includes("alter table post_application_sent_emails add column") ||
         migration
           .toLowerCase()
           .includes("alter table analytics_install_state add column")) &&
