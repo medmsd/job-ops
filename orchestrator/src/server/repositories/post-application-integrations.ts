@@ -17,6 +17,13 @@ function integrationsScopeFilter() {
   return privateDataScopeFilter(postApplicationIntegrations);
 }
 
+export type SchedulerIntegrationScope = {
+  tenantId: string;
+  userId: string | null;
+  provider: PostApplicationProvider;
+  accountKey: string;
+};
+
 type IntegrationCredentials = Record<string, unknown>;
 
 type UpsertConnectedIntegrationInput = {
@@ -199,4 +206,34 @@ export async function updatePostApplicationIntegrationSyncState(
     );
 
   return getPostApplicationIntegration(input.provider, input.accountKey);
+}
+
+/**
+ * Global enumeration used only by the scheduler. Callers must immediately
+ * re-establish per-account request context before touching tenant data.
+ */
+export async function listConnectedPostApplicationIntegrationsForScheduler(): Promise<
+  SchedulerIntegrationScope[]
+> {
+  const rows = await db
+    .select({
+      tenantId: postApplicationIntegrations.tenantId,
+      userId: postApplicationIntegrations.userId,
+      provider: postApplicationIntegrations.provider,
+      accountKey: postApplicationIntegrations.accountKey,
+    })
+    .from(postApplicationIntegrations)
+    .where(eq(postApplicationIntegrations.status, "connected"))
+    .orderBy(
+      postApplicationIntegrations.tenantId,
+      postApplicationIntegrations.provider,
+      postApplicationIntegrations.accountKey,
+    );
+
+  return rows.map((row) => ({
+    tenantId: row.tenantId,
+    userId: row.userId,
+    provider: row.provider as PostApplicationProvider,
+    accountKey: row.accountKey,
+  }));
 }

@@ -19,6 +19,10 @@ import { attachChallengeViewerUpgradeProxy } from "./services/challenge-viewer";
 import { initializeDemoModeServices } from "./services/demo-mode";
 import { applyStoredEnvOverrides } from "./services/envSettings";
 import { initializeHistoricalServerEventReplaySafely } from "./services/historical-product-analytics";
+import {
+  startResponseSyncScheduler,
+  stopResponseSyncScheduler,
+} from "./services/post-application/response-sync-scheduler";
 import { initialize as initializeVisaSponsors } from "./services/visa-sponsors/index";
 
 const AUTH_SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -145,10 +149,25 @@ async function startServer() {
       });
     }
 
+    try {
+      startResponseSyncScheduler();
+    } catch (error) {
+      logger.warn("Failed to start response sync scheduler", {
+        error: sanitizeUnknown(error),
+      });
+    }
+
     void initializeHistoricalServerEventReplaySafely();
     void initializeActivationAnalyticsSafely();
   });
   attachChallengeViewerUpgradeProxy(server);
+
+  const shutdownResponseSync = () => {
+    stopResponseSyncScheduler();
+    server.close(() => process.exit(0));
+  };
+  process.once("SIGTERM", shutdownResponseSync);
+  process.once("SIGINT", shutdownResponseSync);
 }
 
 void startServer();
