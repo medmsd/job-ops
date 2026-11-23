@@ -305,6 +305,36 @@ describe("tailored-resume service", () => {
     );
   });
 
+  it("restores a superseded snapshot as a new latest version", async () => {
+    mocks.listForJob.mockResolvedValue([
+      makeSnapshot({ id: "snapshot-1", version: 1, status: "superseded" }),
+      makeSnapshot({ id: "snapshot-2", version: 2 }),
+    ]);
+    mocks.getById.mockResolvedValue(
+      makeSnapshot({ id: "snapshot-1", version: 1, status: "superseded" }),
+    );
+
+    const restored = await restoreSnapshot("job-1", "snapshot-1");
+
+    expect(restored.origin).toBe("restored");
+    expect(mocks.insertVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "job-1",
+        origin: "restored",
+        resumeJson: baseResume,
+      }),
+    );
+  });
+
+  it("does not allow editing a superseded snapshot", async () => {
+    mocks.getById.mockResolvedValue(makeSnapshot({ status: "superseded" }));
+
+    await expect(
+      saveSnapshotEdit("job-1", "snapshot-1", baseResume),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mocks.insertVersion).not.toHaveBeenCalled();
+  });
+
   it("throws NOT_FOUND for a snapshot from another job", async () => {
     mocks.getById.mockResolvedValue(
       makeSnapshot({ id: "snapshot-2", jobId: "job-2" }),

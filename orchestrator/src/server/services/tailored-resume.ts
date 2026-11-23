@@ -291,16 +291,27 @@ export async function approveSnapshot(
   });
 }
 
-async function requireApprovedSnapshot(
+async function requireJobSnapshot(
   jobId: string,
   snapshotId: string,
 ): Promise<TailoredResumeSnapshot> {
   await requireJob(jobId);
-  const current = await tailoredResumesRepo.getById(snapshotId);
-  if (!current || current.jobId !== jobId || current.status !== "approved") {
+  const snapshot = await tailoredResumesRepo.getById(snapshotId);
+  if (!snapshot || snapshot.jobId !== jobId) {
     throw notFound("Tailored CV snapshot not found");
   }
-  return current;
+  return snapshot;
+}
+
+async function requireApprovedSnapshot(
+  jobId: string,
+  snapshotId: string,
+): Promise<TailoredResumeSnapshot> {
+  const snapshot = await requireJobSnapshot(jobId, snapshotId);
+  if (snapshot.status !== "approved") {
+    throw notFound("Tailored CV snapshot not found");
+  }
+  return snapshot;
 }
 
 export async function saveSnapshotEdit(
@@ -332,7 +343,9 @@ export async function restoreSnapshot(
   jobId: string,
   snapshotId: string,
 ): Promise<TailoredResumeSnapshot> {
-  const current = await requireApprovedSnapshot(jobId, snapshotId);
+  // Older versions are superseded once a newer one is written; they must stay
+  // restorable so history can be rolled back without deleting anything.
+  const current = await requireJobSnapshot(jobId, snapshotId);
   return writeVersion({
     jobId,
     resumeJson: current.resumeJson,
