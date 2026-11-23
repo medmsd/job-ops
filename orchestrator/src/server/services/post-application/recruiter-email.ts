@@ -25,6 +25,7 @@ import { getPdfPath, pdfExists } from "@server/services/pdf";
 import {
   GRAPH_SEND_SCOPES,
   type GraphCredentials,
+  type GraphSendMailResult,
   resolveGraphAccessToken,
   sendGraphMail,
 } from "@server/services/post-application/ingestion/graph-api";
@@ -620,8 +621,9 @@ export async function sendRecruiterEmail(input: {
     );
   }
 
+  let graphSend: GraphSendMailResult | undefined;
   try {
-    await sendGraphMail({
+    graphSend = await sendGraphMail({
       token: resolved.accessToken,
       to,
       subject,
@@ -658,6 +660,20 @@ export async function sendRecruiterEmail(input: {
     status: "sent",
     sentAt,
   });
+
+  const updatedRecord =
+    await sentEmailsRepo.updatePostApplicationSentEmailProvenance({
+      id: record.id,
+      graphMessageId: graphSend?.id ?? null,
+      internetMessageId: graphSend?.internetMessageId ?? null,
+    });
+  if (!updatedRecord) {
+    logger.warn("Recruiter email provenance update failed", {
+      route: "POST /api/jobs/:id/email/send",
+      jobId: job.id,
+      sentEmailId: record.id,
+    });
+  }
 
   logger.info("Recruiter email sent", {
     route: "POST /api/jobs/:id/email/send",

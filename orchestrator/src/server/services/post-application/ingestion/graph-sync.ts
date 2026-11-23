@@ -9,6 +9,7 @@ import {
   getPostApplicationMessageByExternalId,
   upsertPostApplicationMessage,
 } from "@server/repositories/post-application-messages";
+import { findPostApplicationSentEmailByThread } from "@server/repositories/post-application-sent-emails";
 import {
   completePostApplicationSyncRun,
   startPostApplicationSyncRun,
@@ -72,6 +73,21 @@ function resolveProcessingStatus(input: {
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Unknown error";
+}
+
+function resolveThreadSuggestion(message: {
+  conversationId: string | null;
+  internetMessageId: string | null;
+  inReplyTo: string[];
+  references: string[];
+}) {
+  return findPostApplicationSentEmailByThread({
+    provider: "graph",
+    internetMessageId: message.internetMessageId,
+    inReplyTo: message.inReplyTo,
+    references: message.references,
+    graphConversationId: message.conversationId,
+  });
 }
 
 async function runWithConcurrency<T>(
@@ -227,23 +243,30 @@ export async function runGraphIngestionSync(args: {
           return;
         }
 
-        const emailText = buildEmailText({
-          from,
-          subject: message.subject,
-          date,
-          body: message.body,
-        });
-        const routerResult = await classifyWithSmartRouter({
-          emailText,
-          activeJobs: activeJobMinified,
-        });
+        const sentEmail = await resolveThreadSuggestion(message);
+        const routerResult = sentEmail
+          ? null
+          : await classifyWithSmartRouter({
+              emailText: buildEmailText({
+                from,
+                subject: message.subject,
+                date,
+                body: message.body,
+              }),
+              activeJobs: activeJobMinified,
+            });
 
-        const matchedJobId =
-          routerResult.bestMatchId && activeJobIds.has(routerResult.bestMatchId)
+        const routerMatchedJobId =
+          routerResult?.bestMatchId &&
+          activeJobIds.has(routerResult.bestMatchId)
             ? routerResult.bestMatchId
             : null;
-        const isPendingMatch = routerResult.confidence >= 50;
-        const isRelevantOrphan = routerResult.isRelevant;
+        const isPendingMatch = Boolean(
+          sentEmail || (routerResult && routerResult.confidence >= 50),
+        );
+        const isRelevantOrphan = sentEmail
+          ? true
+          : Boolean(routerResult?.isRelevant);
         const processingStatus = resolveProcessingStatus({
           isPendingMatch,
           isRelevantOrphan,
@@ -262,22 +285,44 @@ export async function runGraphIngestionSync(args: {
           subject: message.subject,
           receivedAt: message.receivedAt,
           snippet: message.snippet,
-          classificationLabel: routerResult.stageTarget,
-          classificationConfidence: routerResult.confidence / 100,
-          classificationPayload: {
-            method: "smart_router",
-            reason: routerResult.reason,
-            stageTarget: routerResult.stageTarget,
-          },
-          relevanceLlmScore: routerResult.confidence,
-          relevanceDecision: routerResult.isRelevant
-            ? "relevant"
-            : "not_relevant",
-          matchedJobId: isPendingMatch ? matchedJobId : null,
-          matchConfidence: routerResult.confidence,
-          stageTarget: routerResult.stageTarget,
-          messageType: routerResult.messageType,
-          stageEventPayload: routerResult.stageEventPayload,
+          classificationLabel: sentEmail
+            ? "thread_match"
+            : (routerResult?.stageTarget ?? null),
+          classificationConfidence: sentEmail
+            ? 1
+            : (routerResult?.confidence ?? 0) / 100,
+          classificationPayload: sentEmail
+            ? {
+                method: "thread_match",
+                reason: "thread_match",
+                matchedBy:
+                  message.inReplyTo.length > 0 || message.references.length > 0
+                    ? "internet_message_headers"
+                    : "graph_conversation_id",
+                sentEmailId: sentEmail.id,
+              }
+            : {
+                method: "smart_router",
+                reason: routerResult?.reason ?? "smart_router",
+                stageTarget: routerResult?.stageTarget ?? "no_change",
+              },
+          relevanceLlmScore: sentEmail
+            ? null
+            : (routerResult?.confidence ?? null),
+          relevanceDecision:
+            sentEmail || routerResult?.isRelevant ? "relevant" : "not_relevant",
+          matchedJobId:
+            sentEmail?.jobId ?? (isPendingMatch ? routerMatchedJobId : null),
+          matchConfidence: sentEmail ? 100 : (routerResult?.confidence ?? null),
+          stageTarget: sentEmail
+            ? "no_change"
+            : (routerResult?.stageTarget ?? "no_change"),
+          messageType: sentEmail
+            ? "update"
+            : (routerResult?.messageType ?? "other"),
+          stageEventPayload: sentEmail
+            ? { suggestedStageTarget: "no_change" }
+            : (routerResult?.stageEventPayload ?? null),
           processingStatus,
         });
 

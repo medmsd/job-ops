@@ -28,6 +28,10 @@ vi.mock("@server/repositories/post-application-messages", () => ({
   upsertPostApplicationMessage: mocks.upsert,
 }));
 
+vi.mock("@server/repositories/post-application-sent-emails", () => ({
+  findPostApplicationSentEmailByThread: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@server/repositories/post-application-sync-runs", () => ({
   startPostApplicationSyncRun: mocks.startRun,
   completePostApplicationSyncRun: mocks.completeRun,

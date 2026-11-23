@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   resolveToken: vi.fn(),
   sendMail: vi.fn(),
   createSentEmail: vi.fn(),
+  updateProvenance: vi.fn(),
   getScope: vi.fn(),
 }));
 
@@ -44,6 +45,7 @@ vi.mock("@server/repositories/post-application-integrations", () => ({
 }));
 vi.mock("@server/repositories/post-application-sent-emails", () => ({
   createPostApplicationSentEmail: mocks.createSentEmail,
+  updatePostApplicationSentEmailProvenance: mocks.updateProvenance,
 }));
 vi.mock("@server/tenancy/private-scope", () => ({
   getPrivateDataScope: mocks.getScope,
@@ -148,8 +150,16 @@ describe("recruiter email service", () => {
       scope:
         "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send",
     });
-    mocks.sendMail.mockResolvedValue(undefined);
+    mocks.sendMail.mockResolvedValue({
+      id: "graph-message-1",
+      internetMessageId: "<graph-message-1@example.com>",
+    });
     mocks.createSentEmail.mockResolvedValue({ id: "sent-1" });
+    mocks.updateProvenance.mockResolvedValue({
+      id: "sent-1",
+      graphMessageId: "graph-message-1",
+      internetMessageId: "<graph-message-1@example.com>",
+    });
   });
 
   afterEach(async () => {
@@ -506,6 +516,11 @@ describe("recruiter email service", () => {
         status: "sent",
       }),
     );
+    expect(mocks.updateProvenance).toHaveBeenCalledWith({
+      id: "sent-1",
+      graphMessageId: "graph-message-1",
+      internetMessageId: "<graph-message-1@example.com>",
+    });
     expect(result).toMatchObject({
       jobId: "job-1",
       to: "new.recruiter@example.com",

@@ -149,12 +149,24 @@ describe("graph api", () => {
     expect(String(init.body)).toContain("Mail.Send");
   });
 
-  it("sends mail through /me/sendMail with a single recipient and attachment", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      status: 202,
-      text: vi.fn().mockResolvedValue(""),
-    } as unknown as Response);
+  it("creates a draft with a single recipient and attachment, then sends it", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: "draft-1",
+            internetMessageId: "<draft-1@example.com>",
+          }),
+        ),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        text: vi.fn().mockResolvedValue(""),
+      } as unknown as Response);
 
     await sendGraphMail({
       token: "send-token",
@@ -168,25 +180,22 @@ describe("graph api", () => {
       },
     });
 
-    const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://graph.microsoft.com/v1.0/me/sendMail");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://graph.microsoft.com/v1.0/me/messages");
     expect(init.method).toBe("POST");
     const payload = JSON.parse(String(init.body)) as {
-      message: {
-        toRecipients: Array<{ emailAddress: { address: string } }>;
-        attachments: Array<{ name: string; contentBytes: string }>;
-      };
-      saveToSentItems: boolean;
+      toRecipients: Array<{ emailAddress: { address: string } }>;
+      attachments: Array<{ name: string; contentBytes: string }>;
     };
-    expect(payload.message.toRecipients).toHaveLength(1);
-    expect(payload.message.toRecipients[0]?.emailAddress.address).toBe(
+    expect(payload.toRecipients).toHaveLength(1);
+    expect(payload.toRecipients[0]?.emailAddress.address).toBe(
       "recruiter@example.com",
     );
-    expect(payload.message.attachments[0]).toMatchObject({
+    expect(payload.attachments[0]).toMatchObject({
       name: "resume.pdf",
       contentBytes: "JVBERi0=",
     });
-    expect(payload.saveToSentItems).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("maps failed Graph sends to a sanitized upstream error", async () => {
@@ -328,5 +337,127 @@ describe("graph api", () => {
     } as unknown as Response);
 
     await expect(fetchLatestGraphMessage("access-token")).resolves.toBeNull();
+  });
+
+  it("creates a draft, sends it, and returns Graph send identifiers", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        text: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            id: "graph-message-1",
+            internetMessageId: "<graph-message-1@example.com>",
+          }),
+        ),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        text: vi.fn().mockResolvedValue(""),
+      } as unknown as Response);
+
+    const result = await sendGraphMail({
+      token: "access-token",
+      to: "recruiter@example.com",
+      subject: "Application",
+      body: "Hello",
+      attachment: {
+        name: "resume.pdf",
+        contentType: "application/pdf",
+        contentBytes: "JVBERi0=",
+      },
+    });
+
+    expect(result).toEqual({
+      id: "graph-message-1",
+      internetMessageId: "<graph-message-1@example.com>",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://graph.microsoft.com/v1.0/me/messages",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://graph.microsoft.com/v1.0/me/messages/graph-message-1/send",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("fetches the internetMessageId after send when the draft response omits it", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: "graph-message-2" })),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        text: vi.fn().mockResolvedValue(""),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          id: "graph-message-2",
+          internetMessageId: "<graph-message-2@example.com>",
+        }),
+      } as unknown as Response);
+
+    await expect(
+      sendGraphMail({
+        token: "access-token",
+        to: "recruiter@example.com",
+        subject: "Application",
+        body: "Hello",
+        attachment: {
+          name: "resume.pdf",
+          contentType: "application/pdf",
+          contentBytes: "JVBERi0=",
+        },
+      }),
+    ).resolves.toEqual({
+      id: "graph-message-2",
+      internetMessageId: "<graph-message-2@example.com>",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://graph.microsoft.com/v1.0/me/messages/graph-message-2?$select=id,internetMessageId",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("selects reply headers needed for sent-message thread matching", () => {
+    const url = new URL(buildGraphMessagesUrl(7, 50));
+    const select = url.searchParams.get("$select") ?? "";
+
+    expect(select).toContain("internetMessageId");
+    expect(select).toContain("internetMessageHeaders");
+    expect(url.searchParams.get("$top")).toBe("50");
+  });
+
+  it("normalizes reply headers into deduplicated message ids", () => {
+    const message = normalizeGraphMessage({
+      id: "reply-1",
+      internetMessageId: "<reply@example.com>",
+      internetMessageHeaders: [
+        { name: "in-reply-to", value: "<sent@example.com>" },
+        { name: "References", value: "<sent@example.com> <other@example.com>" },
+        { name: "Subject", value: "RE: Application" },
+      ],
+      subject: "RE: Application",
+    });
+
+    expect(message).toMatchObject({
+      internetMessageId: "<reply@example.com>",
+      inReplyTo: ["sent@example.com"],
+      references: ["sent@example.com", "other@example.com"],
+    });
   });
 });

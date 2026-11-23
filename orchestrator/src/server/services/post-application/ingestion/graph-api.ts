@@ -19,6 +19,9 @@ export type GraphCredentials = {
 export type GraphMailMessage = {
   id: string;
   conversationId: string | null;
+  internetMessageId: string | null;
+  inReplyTo: string[];
+  references: string[];
   fromAddress: string;
   fromDomain: string | null;
   senderName: string | null;
@@ -37,6 +40,8 @@ type GraphEmailAddress = {
 type GraphApiMessage = {
   id?: string;
   conversationId?: string;
+  internetMessageId?: string;
+  internetMessageHeaders?: Array<{ name?: string; value?: string }>;
   subject?: string;
   bodyPreview?: string;
   receivedDateTime?: string;
@@ -135,6 +140,44 @@ function asString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function graphHeaderValues(
+  headers: Array<{ name?: string; value?: string }> | undefined,
+  name: string,
+): string[] {
+  if (!headers) return [];
+  return headers
+    .filter(
+      (header) => (header.name ?? "").toLowerCase() === name.toLowerCase(),
+    )
+    .map((header) => asString(header.value))
+    .filter((value): value is string => Boolean(value));
+}
+
+function splitMessageIds(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((part) => asString(part.replace(/^<|>$/g, "")))
+    .filter((part): part is string => Boolean(part));
+}
+
+export function parseGraphReplyHeaders(message: GraphApiMessage): {
+  inReplyTo: string[];
+  references: string[];
+} {
+  const inReplyTo = graphHeaderValues(
+    message.internetMessageHeaders,
+    "In-Reply-To",
+  ).flatMap(splitMessageIds);
+  const references = graphHeaderValues(
+    message.internetMessageHeaders,
+    "References",
+  ).flatMap(splitMessageIds);
+  return {
+    inReplyTo: Array.from(new Set(inReplyTo)),
+    references: Array.from(new Set(references)),
+  };
 }
 
 export async function fetchWithTimeout(
@@ -347,33 +390,57 @@ export interface GraphSendMailAttachment {
   contentBytes: string;
 }
 
+export interface GraphSendMailResult {
+  id: string;
+  internetMessageId: string | null;
+}
+
 export async function sendGraphMail(input: {
   token: string;
   to: string;
   subject: string;
   body: string;
   attachment: GraphSendMailAttachment;
-}): Promise<void> {
-  await graphApiPost<null>(
+}): Promise<GraphSendMailResult> {
+  const draft = await graphApiPost<{ id?: string; internetMessageId?: string }>(
     input.token,
-    "https://graph.microsoft.com/v1.0/me/sendMail",
+    "https://graph.microsoft.com/v1.0/me/messages",
     {
-      message: {
-        subject: input.subject,
-        body: { contentType: "Text", content: input.body },
-        toRecipients: [{ emailAddress: { address: input.to } }],
-        attachments: [
-          {
-            "@odata.type": "#microsoft.graph.fileAttachment",
-            name: input.attachment.name,
-            contentType: input.attachment.contentType,
-            contentBytes: input.attachment.contentBytes,
-          },
-        ],
-      },
-      saveToSentItems: true,
+      subject: input.subject,
+      body: { contentType: "Text", content: input.body },
+      toRecipients: [{ emailAddress: { address: input.to } }],
+      attachments: [
+        {
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: input.attachment.name,
+          contentType: input.attachment.contentType,
+          contentBytes: input.attachment.contentBytes,
+        },
+      ],
     },
   );
+
+  const id = asString(draft?.id);
+  if (!id) {
+    throw upstreamError("Microsoft Graph did not return a draft message id.");
+  }
+
+  await graphApiPost<null>(
+    input.token,
+    `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(id)}/send`,
+    {},
+  );
+
+  let internetMessageId = asString(draft?.internetMessageId);
+  if (!internetMessageId) {
+    const sent = await graphApi<{ internetMessageId?: string }>(
+      input.token,
+      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(id)}?$select=id,internetMessageId`,
+    );
+    internetMessageId = asString(sent.internetMessageId);
+  }
+
+  return { id, internetMessageId };
 }
 
 export function buildGraphMessagesUrl(
@@ -386,6 +453,8 @@ export function buildGraphMessagesUrl(
   const select = [
     "id",
     "conversationId",
+    "internetMessageId",
+    "internetMessageHeaders",
     "subject",
     "bodyPreview",
     "receivedDateTime",
@@ -436,9 +505,13 @@ export function normalizeGraphMessage(
   const fromAddress = asString(emailAddress?.address)?.toLowerCase() ?? "";
   const atIndex = fromAddress.indexOf("@");
 
+  const replyHeaders = parseGraphReplyHeaders(raw);
   return {
     id,
     conversationId: asString(raw.conversationId),
+    internetMessageId: asString(raw.internetMessageId),
+    inReplyTo: replyHeaders.inReplyTo,
+    references: replyHeaders.references,
     fromAddress,
     fromDomain: atIndex > 0 ? fromAddress.slice(atIndex + 1) : null,
     senderName: asString(emailAddress?.name),
