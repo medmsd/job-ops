@@ -198,6 +198,48 @@ describe("graph api", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps a delivered send successful when the sent-copy lookup fails", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        text: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ id: "graph-message-3" })),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        text: vi.fn().mockResolvedValue(""),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: vi.fn().mockResolvedValue({}),
+      } as unknown as Response);
+
+    await expect(
+      sendGraphMail({
+        token: "send-token",
+        to: "recruiter@example.com",
+        subject: "Application",
+        body: "Hello",
+        attachment: {
+          name: "resume.pdf",
+          contentType: "application/pdf",
+          contentBytes: "JVBERi0=",
+        },
+      }),
+    ).resolves.toEqual({
+      id: "graph-message-3",
+      internetMessageId: null,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "GET" });
+  });
+
   it("maps failed Graph sends to a sanitized upstream error", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,

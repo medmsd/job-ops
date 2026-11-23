@@ -21,6 +21,16 @@ const mocks = vi.hoisted(() => ({
   createSentEmail: vi.fn(),
   updateProvenance: vi.fn(),
   getScope: vi.fn(),
+  loggerWarn: vi.fn(),
+}));
+
+vi.mock("@infra/logger", () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: mocks.loggerWarn,
+    error: vi.fn(),
+  },
 }));
 
 vi.mock("@server/repositories/jobs", () => ({
@@ -527,6 +537,31 @@ describe("recruiter email service", () => {
       subject: "Edited subject",
       sentEmailId: "sent-1",
     });
+  });
+
+  it("keeps a sent email successful when provenance persistence throws", async () => {
+    const preview = await previewRecruiterEmail({ jobId: "job-1" });
+    mocks.updateProvenance.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const result = await sendRecruiterEmail({
+      jobId: "job-1",
+      request: { previewToken: preview.previewToken },
+    });
+
+    expect(result).toMatchObject({
+      jobId: "job-1",
+      sentEmailId: "sent-1",
+    });
+    expect(mocks.sendMail).toHaveBeenCalledTimes(1);
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      "Recruiter email provenance update threw",
+      {
+        route: "POST /api/jobs/:id/email/send",
+        jobId: "job-1",
+        sentEmailId: "sent-1",
+        status: "failed",
+      },
+    );
   });
 
   it("rejects reuse of a consumed preview token", async () => {

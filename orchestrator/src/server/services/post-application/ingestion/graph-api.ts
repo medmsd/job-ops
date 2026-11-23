@@ -433,11 +433,17 @@ export async function sendGraphMail(input: {
 
   let internetMessageId = asString(draft?.internetMessageId);
   if (!internetMessageId) {
-    const sent = await graphApi<{ internetMessageId?: string }>(
-      input.token,
-      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(id)}?$select=id,internetMessageId`,
-    );
-    internetMessageId = asString(sent.internetMessageId);
+    try {
+      const sent = await graphApi<{ internetMessageId?: string }>(
+        input.token,
+        `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(id)}?$select=id,internetMessageId`,
+      );
+      internetMessageId = asString(sent.internetMessageId);
+    } catch {
+      // The message was already sent; Graph may have invalidated the draft id
+      // or not made the sent copy readable yet. Do not fail the delivered send.
+      internetMessageId = null;
+    }
   }
 
   return { id, internetMessageId };

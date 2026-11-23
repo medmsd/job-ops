@@ -661,17 +661,28 @@ export async function sendRecruiterEmail(input: {
     sentAt,
   });
 
-  const updatedRecord =
-    await sentEmailsRepo.updatePostApplicationSentEmailProvenance({
-      id: record.id,
-      graphMessageId: graphSend?.id ?? null,
-      internetMessageId: graphSend?.internetMessageId ?? null,
-    });
-  if (!updatedRecord) {
-    logger.warn("Recruiter email provenance update failed", {
+  try {
+    const updatedRecord =
+      await sentEmailsRepo.updatePostApplicationSentEmailProvenance({
+        id: record.id,
+        graphMessageId: graphSend?.id ?? null,
+        internetMessageId: graphSend?.internetMessageId ?? null,
+      });
+    if (!updatedRecord) {
+      logger.warn("Recruiter email provenance update failed", {
+        route: "POST /api/jobs/:id/email/send",
+        jobId: job.id,
+        sentEmailId: record.id,
+      });
+    }
+  } catch {
+    // The email was already delivered; a provenance write failure must not make
+    // the API response look like the send failed.
+    logger.warn("Recruiter email provenance update threw", {
       route: "POST /api/jobs/:id/email/send",
       jobId: job.id,
       sentEmailId: record.id,
+      status: "failed",
     });
   }
 
