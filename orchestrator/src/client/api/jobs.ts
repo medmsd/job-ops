@@ -1,6 +1,7 @@
 import type {
   ApplicationStage,
   ApplicationTask,
+  DesignResumeJson,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -20,6 +21,7 @@ import type {
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
+  TailoredResumeSnapshot,
   TailoringPlanResult,
   TracerAnalyticsResponse,
   TracerReadinessResponse,
@@ -387,6 +389,53 @@ export async function getTailoringPlan(
     method: "POST",
     body: text ? JSON.stringify({ text }) : undefined,
   });
+}
+
+export async function getTailoredSnapshots(
+  jobId: string,
+): Promise<TailoredResumeSnapshot[]> {
+  return fetchApi<TailoredResumeSnapshot[]>(`/jobs/${jobId}/tailored-snapshots`);
+}
+
+export async function getCurrentTailoredSnapshot(
+  jobId: string,
+): Promise<TailoredResumeSnapshot | null> {
+  return fetchApi<TailoredResumeSnapshot | null>(
+    `/jobs/${jobId}/tailored-snapshots/current`,
+  );
+}
+
+export async function approveTailoredSnapshot(
+  jobId: string,
+): Promise<TailoredResumeSnapshot> {
+  return fetchApi<TailoredResumeSnapshot>(
+    `/jobs/${jobId}/tailored-snapshots/approve`,
+    { method: "POST" },
+  );
+}
+
+export async function saveTailoredSnapshot(
+  jobId: string,
+  snapshotId: string,
+  resumeJson: DesignResumeJson,
+): Promise<TailoredResumeSnapshot> {
+  return fetchApi<TailoredResumeSnapshot>(
+    `/jobs/${jobId}/tailored-snapshots/${snapshotId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ resumeJson }),
+    },
+  );
+}
+
+export async function restoreTailoredSnapshot(
+  jobId: string,
+  snapshotId: string,
+): Promise<TailoredResumeSnapshot> {
+  return fetchApi<TailoredResumeSnapshot>(
+    `/jobs/${jobId}/tailored-snapshots/${snapshotId}/restore`,
+    { method: "POST" },
+  );
 }
 
 export async function generateJobPdf(id: string): Promise<Job> {

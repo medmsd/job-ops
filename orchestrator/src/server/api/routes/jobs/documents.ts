@@ -9,6 +9,7 @@ import { resolveRequestOrigin } from "@server/infra/request-origin";
 import { generateFinalPdf, summarizeJob } from "@server/pipeline/index";
 import * as jobDocumentsRepo from "@server/repositories/job-documents";
 import * as jobsRepo from "@server/repositories/jobs";
+import * as tailoredResumesRepo from "@server/repositories/tailored-resumes";
 import { getCareerEvidenceBank } from "@server/services/careerEvidence";
 import {
   simulateGeneratePdf,
@@ -20,8 +21,14 @@ import {
 } from "@server/services/job-document-storage";
 import { uploadJobPdf } from "@server/services/job-pdf-upload";
 import { getProfile } from "@server/services/profile";
+import {
+  approveSnapshot,
+  restoreSnapshot,
+  saveSnapshotEdit,
+} from "@server/services/tailored-resume";
 import { generateTailoringPlan } from "@server/services/tailoring-plan";
 import { getSafeInlineJobDocumentMediaType } from "@shared/job-document-classification.js";
+import type { DesignResumeJson } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 import {
@@ -46,6 +53,10 @@ type TailoringGenerateField = (typeof tailoringGenerateFields)[number];
 
 const tailoringPlanRequestSchema = z.object({
   text: z.string().max(20000).optional(),
+});
+
+const tailoredSnapshotEditSchema = z.object({
+  resumeJson: z.record(z.string(), z.unknown()),
 });
 
 function encodeContentDispositionFileName(value: string): string {
@@ -515,6 +526,84 @@ jobsDocumentsRouter.post(
         items: result.data?.items.length ?? 0,
       });
       ok(res, result.data);
+    } catch (error) {
+      fail(res, toJobsRouteError(error));
+    }
+  },
+);
+
+jobsDocumentsRouter.get("/:id/tailored-snapshots/current", async (req, res) => {
+  try {
+    await requireJob(req.params.id);
+    ok(res, await tailoredResumesRepo.getLatestApprovedForJob(req.params.id));
+  } catch (error) {
+    fail(res, toJobsRouteError(error));
+  }
+});
+
+jobsDocumentsRouter.get("/:id/tailored-snapshots", async (req, res) => {
+  try {
+    await requireJob(req.params.id);
+    ok(res, await tailoredResumesRepo.listForJob(req.params.id, 10));
+  } catch (error) {
+    fail(res, toJobsRouteError(error));
+  }
+});
+
+jobsDocumentsRouter.post("/:id/tailored-snapshots/approve", async (req, res) => {
+  try {
+    const job = await requireJob(req.params.id);
+    if (!job.jobDescription?.trim()) {
+      return fail(
+        res,
+        badRequest("Add a job description before approving a tailored CV."),
+      );
+    }
+    const snapshot = await approveSnapshot(job.id, {
+      requestOrigin: resolveRequestOrigin(req),
+    });
+    logger.info("Tailored CV snapshot approved", {
+      route: "POST /api/jobs/:id/tailored-snapshots/approve",
+      jobId: job.id,
+      requestId: getRequestId(),
+      snapshotId: snapshot.id,
+      version: snapshot.version,
+    });
+    ok(res, snapshot, 201);
+  } catch (error) {
+    fail(res, toJobsRouteError(error));
+  }
+});
+
+jobsDocumentsRouter.patch(
+  "/:id/tailored-snapshots/:snapshotId",
+  async (req, res) => {
+    try {
+      await requireJob(req.params.id);
+      const parsed = tailoredSnapshotEditSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return fail(res, badRequest("Invalid tailored CV payload."));
+      }
+      ok(
+        res,
+        await saveSnapshotEdit(
+          req.params.id,
+          req.params.snapshotId,
+          parsed.data.resumeJson as DesignResumeJson,
+        ),
+      );
+    } catch (error) {
+      fail(res, toJobsRouteError(error));
+    }
+  },
+);
+
+jobsDocumentsRouter.post(
+  "/:id/tailored-snapshots/:snapshotId/restore",
+  async (req, res) => {
+    try {
+      await requireJob(req.params.id);
+      ok(res, await restoreSnapshot(req.params.id, req.params.snapshotId), 201);
     } catch (error) {
       fail(res, toJobsRouteError(error));
     }

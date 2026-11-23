@@ -11,9 +11,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@client/api", () => ({
+  approveTailoredSnapshot: vi.fn(),
   generateJobPdf: vi.fn().mockResolvedValue({}),
+  getCurrentTailoredSnapshot: vi.fn(),
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
+  getTailoredSnapshots: vi.fn(),
   getTailoringPlan: vi.fn(),
+  restoreTailoredSnapshot: vi.fn(),
+  saveTailoredSnapshot: vi.fn(),
   summarizeJob: vi.fn(),
   updateJob: vi.fn().mockImplementation(async (_id, payload) => payload),
 }));
