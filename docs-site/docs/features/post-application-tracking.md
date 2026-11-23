@@ -13,11 +13,13 @@ The Tracking Inbox monitors Gmail or Outlook (Microsoft Graph) for job-applicati
 
 ### Overview
 
-1. Scans Gmail or Outlook for recruitment-related emails
-2. Matches emails to tracked jobs using AI
-3. Updates timeline/state when confidence is high
-4. Queues uncertain matches for manual review
-5. Prepares a recruiter email from the saved cover letter and tailored PDF, sent only after you confirm
+1. Scans connected Gmail or Microsoft Graph mailboxes every 30 minutes
+2. Checks the last 7 days, up to 50 messages per account per run
+3. Classifies only newly discovered messages and matches them to active jobs
+4. Queues every relevant response as **Needs review** with a suggested job and stage
+5. Changes job status only when you click **Approve** in the Tracking Inbox
+6. Shows a pending-response badge on the job page that opens the filtered inbox
+7. Prepares a recruiter email from the saved cover letter and tailored PDF, sent only after you confirm
 
 ## Why it exists
 
@@ -25,22 +27,20 @@ Application replies and recruiter outreach arrive by email, and manually copying
 
 ## How to use it
 
-### Smart router flow
+### Smart router and review flow
 
 ```mermaid
 flowchart TD
-    A[Recruitment email arrives in Gmail or Outlook] --> B[Smart Router AI analyzes content]
-    B --> C{How confident is the match?}
-
-    C -->|95-100%| D[Auto-linked to job]
-    D --> E[Timeline updated automatically]
-
-    C -->|50-94%| F[Goes to Inbox for review with suggested match]
-
-    C -->|<50%| G{Is it relevant?}
-    G -->|Yes| H[Goes to Inbox as orphan]
-    G -->|No| I[Ignored]
+    A[Application response arrives in Gmail or Outlook] --> B[Smart Router or sent-message thread match]
+    B --> C{Is it relevant?}
+    C -->|No| D[Ignored]
+    C -->|Yes| E[Stored as Needs review]
+    E --> F[You review the suggested job and stage]
+    F -->|Approve| G[Job timeline and status update]
+    F -->|Ignore| H[Message marked ignored]
 ```
+
+No job status changes without explicit approval, including 100% confidence matches. Rejections, interview invitations, offers, generic updates, and replies to emails sent by JobOps all follow the same review-first path.
 
 ### Setup
 
@@ -91,6 +91,8 @@ not supported.
 
 Open **Job → Emails** to review captured messages already linked to that job.
 
+When a job has pending responses, the tab header shows a **pending** badge. The badge links to `/tracking-inbox?jobId=<jobId>` and applies a read-only job filter; following the link never approves or changes a message.
+
 The tab is read-only. It shows stored metadata only: sender, subject, received
 time, snippet, processing status, message type, match confidence, account label,
 and a Gmail thread link when the stored message includes a Gmail thread ID.
@@ -100,9 +102,12 @@ actions. Use **Tracking Inbox** for approve/ignore decisions.
 
 Confidence interpretation:
 
-- `95-100%`: auto-processed
-- `50-94%`: pending review with suggestion
-- `<50%`: pending review as orphan/ignored
+- `95-100%`: strong suggestion, still **Needs review**
+- `50-94%`: **Needs review** with suggestion
+- `<50%` but relevant: **Needs review** as an orphan
+- Irrelevant: **Ignored**
+
+Confidence describes suggestion quality only. Approval is always required.
 
 ### Email a recruiter
 
@@ -159,7 +164,7 @@ curl -X PUT "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
 - Microsoft Graph scopes: `openid`, `offline_access`, `User.Read`, `Mail.Read`, and `Mail.Send` (only for sending after confirmation)
 - Minimal profile and job fields are sent to the LLM for matching and cover-letter generation
 - Email data stays local in your instance
-- Graph send uses a single `fileAttachment`, no BCC, and `saveToSentItems: true`; upstream error bodies are never logged or returned
+- Graph send creates a draft and then sends it so the Graph message ID and RFC 5322 `internetMessageId` can be stored for future reply matching; no BCC is added, and upstream error bodies are never logged or returned
 
 ## API reference
 
@@ -188,6 +193,8 @@ curl -X PUT "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
 - Empty **To** field with "No recruiter address was found": type the address manually in the preview, or add it to the job description / link a tracked email for future prefill.
 - Wrong recipient pre-filled from job details: edit the **To** field in the preview; only your explicit confirmation sends the email.
 - Preview token expired or already used: open **Apply now** again to generate a fresh preview.
+- Pending response not shown on the job page: open Tracking Inbox and confirm the item is still `Needs review`; already decided items do not appear in the pending badge.
+- Reply to an application sent by JobOps was not auto-matched: legacy sent emails created before thread provenance was stored fall back to normal job/title/domain matching and still require approval.
 
 ## Related pages
 

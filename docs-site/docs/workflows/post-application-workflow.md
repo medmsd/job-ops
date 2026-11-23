@@ -47,11 +47,12 @@ Use this when you want JobOps to ingest recruitment emails and suggest/apply upd
 
 ### High-level flow
 
-1. Connect Gmail provider.
-2. Run sync (or scheduled sync, depending on setup).
-3. Smart router scores message-to-job match.
-4. High confidence updates are auto-linked.
-5. Mid/low confidence items go to inbox for review.
+1. Connect Gmail or Microsoft Graph.
+2. Background sync runs immediately at startup and every 30 minutes after that.
+3. Each run checks the last 7 days and at most 50 messages per connected account.
+4. Newly discovered messages are classified; already-stored messages are never reclassified.
+5. Every relevant response is stored as **Needs review**, even with a high-confidence match.
+6. Approve to update the job timeline; ignore to dismiss the suggestion.
 
 ### Configure Gmail sync
 
@@ -74,7 +75,8 @@ Then in app:
 1. Open Tracking Inbox / provider controls.
 2. Start Gmail OAuth.
 3. Complete consent.
-4. Trigger sync and review inbox items.
+4. Sync runs automatically; use **Sync** only when you want an immediate extra run.
+5. Review inbox items and approve the ones you want applied to jobs.
 
 ### API examples (Gmail path)
 
@@ -168,8 +170,11 @@ The attachment is the tailored PDF JobOps already generated for that job. Files 
 
 ### Wrong job matched
 
-- Expected in lower-confidence buckets.
-- Deny incorrect inbox items and apply manual stage updates where needed.
+- Expected in any confidence bucket. Deny incorrect inbox items and apply the correct job/stage from the review UI; background sync never edits job status.
+
+### Job shows a pending-response badge
+
+Follow the badge to `/tracking-inbox?jobId=<jobId>`. The inbox is filtered to that job for review only; you still choose whether to approve or ignore each message.
 
 ### I prefer not to grant Gmail access
 
