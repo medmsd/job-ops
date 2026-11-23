@@ -1,5 +1,4 @@
 import { logger } from "@infra/logger";
-import { trackServerProductEvent } from "@infra/product-analytics";
 import { getAllJobs } from "@server/repositories/jobs";
 import {
   getPostApplicationIntegration,
@@ -14,9 +13,6 @@ import {
   completePostApplicationSyncRun,
   startPostApplicationSyncRun,
 } from "@server/repositories/post-application-sync-runs";
-import { transitionStage } from "@server/services/applicationTracking";
-import { resolveStageTransitionForTarget } from "@server/services/post-application/stage-target";
-import type { PostApplicationRouterStageTarget } from "@shared/types";
 import { classifyWithSmartRouter, minifyActiveJobs } from "./email-router";
 import type { GraphCredentials } from "./graph-api";
 import {
@@ -66,11 +62,9 @@ function parseGraphCredentials(
 }
 
 function resolveProcessingStatus(input: {
-  isAutoLinked: boolean;
   isPendingMatch: boolean;
   isRelevantOrphan: boolean;
-}): "auto_linked" | "pending_user" | "ignored" {
-  if (input.isAutoLinked) return "auto_linked";
+}): "pending_user" | "ignored" {
   if (input.isPendingMatch || input.isRelevantOrphan) return "pending_user";
   return "ignored";
 }
@@ -78,46 +72,6 @@ function resolveProcessingStatus(input: {
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Unknown error";
-}
-
-async function createAutoStageEvent(args: {
-  jobId: string;
-  stageTarget: PostApplicationRouterStageTarget;
-  receivedAt: number;
-  note: string;
-}): Promise<void> {
-  void trackServerProductEvent(
-    "tracking_email_matched",
-    {
-      provider: "graph",
-      match_mode: "auto_link",
-      stage_target: args.stageTarget,
-      result: "success",
-    },
-    { urlPath: "/tracking-inbox" },
-  );
-
-  const transition = resolveStageTransitionForTarget(args.stageTarget);
-  if (transition.toStage === "no_change") return;
-
-  const eventLabel =
-    args.stageTarget === "applied"
-      ? "Email received"
-      : `Logged from email: ${args.stageTarget}`;
-
-  transitionStage(
-    args.jobId,
-    transition.toStage,
-    Math.floor(args.receivedAt / 1000),
-    {
-      actor: "system",
-      eventType: "status_update",
-      eventLabel,
-      note: args.note,
-      reasonCode: transition.reasonCode ?? "post_application_auto_linked",
-    },
-    transition.outcome,
-  );
 }
 
 async function runWithConcurrency<T>(
@@ -235,34 +189,32 @@ export async function runGraphIngestionSync(args: {
         const date = new Date(message.receivedAt).toISOString();
 
         if (existingMessage) {
-          const { message: savedMessage, autoLinkTransitioned } =
-            await upsertPostApplicationMessage({
-              provider: "graph",
-              accountKey: args.accountKey,
-              integrationId: integration.id,
-              syncRunId: syncRun.id,
-              externalMessageId: message.id,
-              externalThreadId: message.conversationId,
-              fromAddress: message.fromAddress,
-              fromDomain: message.fromDomain,
-              senderName: message.senderName,
-              subject: message.subject,
-              receivedAt: message.receivedAt,
-              snippet: message.snippet,
-              classificationLabel: existingMessage.classificationLabel,
-              classificationConfidence:
-                existingMessage.classificationConfidence,
-              classificationPayload: existingMessage.classificationPayload,
-              relevanceLlmScore: existingMessage.relevanceLlmScore,
-              relevanceDecision: existingMessage.relevanceDecision,
-              matchedJobId: existingMessage.matchedJobId,
-              matchConfidence: existingMessage.matchConfidence,
-              stageTarget: existingMessage.stageTarget,
-              messageType: existingMessage.messageType,
-              stageEventPayload: existingMessage.stageEventPayload,
-              processingStatus: existingMessage.processingStatus,
-              existingMessage,
-            });
+          const { message: savedMessage } = await upsertPostApplicationMessage({
+            provider: "graph",
+            accountKey: args.accountKey,
+            integrationId: integration.id,
+            syncRunId: syncRun.id,
+            externalMessageId: message.id,
+            externalThreadId: message.conversationId,
+            fromAddress: message.fromAddress,
+            fromDomain: message.fromDomain,
+            senderName: message.senderName,
+            subject: message.subject,
+            receivedAt: message.receivedAt,
+            snippet: message.snippet,
+            classificationLabel: existingMessage.classificationLabel,
+            classificationConfidence: existingMessage.classificationConfidence,
+            classificationPayload: existingMessage.classificationPayload,
+            relevanceLlmScore: existingMessage.relevanceLlmScore,
+            relevanceDecision: existingMessage.relevanceDecision,
+            matchedJobId: existingMessage.matchedJobId,
+            matchConfidence: existingMessage.matchConfidence,
+            stageTarget: existingMessage.stageTarget,
+            messageType: existingMessage.messageType,
+            stageEventPayload: existingMessage.stageEventPayload,
+            processingStatus: existingMessage.processingStatus,
+            existingMessage,
+          });
 
           if (savedMessage.processingStatus !== "ignored") {
             relevant += 1;
@@ -272,14 +224,6 @@ export async function runGraphIngestionSync(args: {
             matched += 1;
           }
 
-          if (autoLinkTransitioned && savedMessage.matchedJobId) {
-            await createAutoStageEvent({
-              jobId: savedMessage.matchedJobId,
-              stageTarget: savedMessage.stageTarget ?? "no_change",
-              receivedAt: savedMessage.receivedAt,
-              note: "Auto-created from Smart Router.",
-            });
-          }
           return;
         }
 
@@ -298,47 +242,44 @@ export async function runGraphIngestionSync(args: {
           routerResult.bestMatchId && activeJobIds.has(routerResult.bestMatchId)
             ? routerResult.bestMatchId
             : null;
-        const isAutoLinked = routerResult.confidence >= 95 && matchedJobId;
         const isPendingMatch = routerResult.confidence >= 50;
         const isRelevantOrphan = routerResult.isRelevant;
         const processingStatus = resolveProcessingStatus({
-          isAutoLinked: Boolean(isAutoLinked),
           isPendingMatch,
           isRelevantOrphan,
         });
 
-        const { message: savedMessage, autoLinkTransitioned } =
-          await upsertPostApplicationMessage({
-            provider: "graph",
-            accountKey: args.accountKey,
-            integrationId: integration.id,
-            syncRunId: syncRun.id,
-            externalMessageId: message.id,
-            externalThreadId: message.conversationId,
-            fromAddress: message.fromAddress,
-            fromDomain: message.fromDomain,
-            senderName: message.senderName,
-            subject: message.subject,
-            receivedAt: message.receivedAt,
-            snippet: message.snippet,
-            classificationLabel: routerResult.stageTarget,
-            classificationConfidence: routerResult.confidence / 100,
-            classificationPayload: {
-              method: "smart_router",
-              reason: routerResult.reason,
-              stageTarget: routerResult.stageTarget,
-            },
-            relevanceLlmScore: routerResult.confidence,
-            relevanceDecision: routerResult.isRelevant
-              ? "relevant"
-              : "not_relevant",
-            matchedJobId: isAutoLinked || isPendingMatch ? matchedJobId : null,
-            matchConfidence: routerResult.confidence,
+        const { message: savedMessage } = await upsertPostApplicationMessage({
+          provider: "graph",
+          accountKey: args.accountKey,
+          integrationId: integration.id,
+          syncRunId: syncRun.id,
+          externalMessageId: message.id,
+          externalThreadId: message.conversationId,
+          fromAddress: message.fromAddress,
+          fromDomain: message.fromDomain,
+          senderName: message.senderName,
+          subject: message.subject,
+          receivedAt: message.receivedAt,
+          snippet: message.snippet,
+          classificationLabel: routerResult.stageTarget,
+          classificationConfidence: routerResult.confidence / 100,
+          classificationPayload: {
+            method: "smart_router",
+            reason: routerResult.reason,
             stageTarget: routerResult.stageTarget,
-            messageType: routerResult.messageType,
-            stageEventPayload: routerResult.stageEventPayload,
-            processingStatus,
-          });
+          },
+          relevanceLlmScore: routerResult.confidence,
+          relevanceDecision: routerResult.isRelevant
+            ? "relevant"
+            : "not_relevant",
+          matchedJobId: isPendingMatch ? matchedJobId : null,
+          matchConfidence: routerResult.confidence,
+          stageTarget: routerResult.stageTarget,
+          messageType: routerResult.messageType,
+          stageEventPayload: routerResult.stageEventPayload,
+          processingStatus,
+        });
 
         if (savedMessage.processingStatus !== "ignored") {
           relevant += 1;
@@ -346,15 +287,6 @@ export async function runGraphIngestionSync(args: {
         classified += 1;
         if (savedMessage.matchedJobId) {
           matched += 1;
-        }
-
-        if (autoLinkTransitioned && savedMessage.matchedJobId) {
-          await createAutoStageEvent({
-            jobId: savedMessage.matchedJobId,
-            stageTarget: savedMessage.stageTarget ?? "no_change",
-            receivedAt: savedMessage.receivedAt,
-            note: "Auto-created from Smart Router.",
-          });
         }
       } catch (error) {
         errored += 1;

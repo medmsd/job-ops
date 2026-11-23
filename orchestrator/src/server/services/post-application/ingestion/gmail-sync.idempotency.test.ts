@@ -103,7 +103,7 @@ function makeJsonResponse(body: unknown): Response {
   } as unknown as Response;
 }
 
-describe("gmail sync auto-log idempotency", () => {
+describe("gmail sync review-first idempotency", () => {
   const originalEnv = { ...process.env };
   let tempDir: string;
   let closeDb: (() => void) | null = null;
@@ -171,7 +171,7 @@ describe("gmail sync auto-log idempotency", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it("creates auto stage event only on first auto_linked transition", async () => {
+  it("keeps repeated detections pending_user without job status changes", async () => {
     const { runGmailIngestionSync } = await import("./gmail-sync");
 
     mocks.getPostApplicationMessageByExternalId
@@ -200,7 +200,7 @@ describe("gmail sync auto-log idempotency", () => {
         stageTarget: "assessment",
         messageType: "interview",
         stageEventPayload: null,
-        processingStatus: "auto_linked",
+        processingStatus: "pending_user",
         decidedAt: null,
         decidedBy: null,
         errorCode: null,
@@ -214,31 +214,37 @@ describe("gmail sync auto-log idempotency", () => {
         message: {
           id: "post-msg-1",
           matchedJobId: "job-1",
-          processingStatus: "auto_linked",
+          processingStatus: "pending_user",
           stageTarget: "assessment",
           receivedAt: Date.now(),
         },
         wasCreated: true,
         previousProcessingStatus: null,
-        autoLinkTransitioned: true,
       })
       .mockResolvedValueOnce({
         message: {
           id: "post-msg-1",
           matchedJobId: "job-1",
-          processingStatus: "auto_linked",
+          processingStatus: "pending_user",
           stageTarget: "assessment",
           receivedAt: Date.now(),
         },
         wasCreated: false,
-        previousProcessingStatus: "auto_linked",
-        autoLinkTransitioned: false,
+        previousProcessingStatus: "pending_user",
       });
 
     await runGmailIngestionSync({ accountKey: "default", maxMessages: 1 });
     await runGmailIngestionSync({ accountKey: "default", maxMessages: 1 });
 
     expect(mocks.upsertPostApplicationMessage).toHaveBeenCalledTimes(2);
-    expect(mocks.transitionStage).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertPostApplicationMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ processingStatus: "pending_user" }),
+    );
+    expect(mocks.upsertPostApplicationMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ processingStatus: "pending_user" }),
+    );
+    expect(mocks.transitionStage).not.toHaveBeenCalled();
   });
 });
