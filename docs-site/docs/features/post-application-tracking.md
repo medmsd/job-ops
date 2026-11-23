@@ -23,7 +23,7 @@ The Tracking Inbox monitors Gmail or Outlook (Microsoft Graph) for job-applicati
 
 ## Why it exists
 
-Application replies and recruiter outreach arrive by email, and manually copying every detail into the job timeline is repetitive. Automatic matching keeps the timeline current, while the review queue keeps uncertain matches out of your records. The recruiter-email action closes the loop: once a resume is tailored, you can respond from the same job record with the correct PDF attached, without giving up control of what is sent.
+Application replies and recruiter outreach arrive by email, and manually copying every detail into the job timeline is repetitive. Matching feeds the review queue; your approvals keep the timeline current. The recruiter-email action closes the loop: once a resume is tailored, you can respond from the same job record with the correct PDF attached, without giving up control of what is sent.
 
 ## How to use it
 
@@ -187,7 +187,7 @@ curl -X PUT "http://localhost:3001/api/jobs/<jobId>/cover-letter" \
 
 - No refresh token: disconnect and reconnect the provider.
 - Emails not appearing: check runs, OAuth config, and recruitment subjects.
-- Wrong matches: expected in lower-confidence buckets; use manual review.
+- Wrong matches: possible in any confidence bucket; confidence is only a suggestion, so review before approving.
 - "Reconnect Microsoft Graph to grant Mail.Send permission": `Mail.Send` was added after the Graph connection was authorized; disconnect, reconnect, and approve the permission.
 - "Apply now" / "Email recruiter" disabled: tailor and generate the PDF for that job first.
 - Empty **To** field with "No recruiter address was found": type the address manually in the preview, or add it to the job description / link a tracked email for future prefill.

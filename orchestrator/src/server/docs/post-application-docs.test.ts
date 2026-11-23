@@ -28,7 +28,7 @@ describe("post-application tracking docs", () => {
     expect(feature).toContain("pending-response badge");
     expect(feature).toContain("/tracking-inbox?jobId=");
     expect(feature).not.toContain("Auto-linked to job");
-    expect(feature).not.toContain("95-100%: auto-processed");
+    expect(feature).not.toContain("auto-processed");
 
     expect(workflow).toContain("every 30 minutes");
     expect(workflow).toContain("Needs review");
