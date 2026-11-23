@@ -258,6 +258,45 @@ Related pages:
 - [Career Evidence Bank in Settings](/docs/next/features/settings)
 - [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup)
 
+### Derived tailored fit
+
+What it is:
+
+- **Derived tailored fit — job-specific** is a stored, derived score for how well this job's **approved tailored CV snapshot** matches its job description. The compact readout next to the source score in the job detail panel shows the stored `score/100`, `Not checked` when no result exists, or a `• Stale` marker.
+- The source `suitabilityScore` in the score ring is a different value: it describes the job found by discovery/import. Tailored fit describes the job-specific resume artifact. The two scores are never relabelled as each other.
+
+Why it exists:
+
+- Source fit must stay stable when you edit your tailored CV; tailored fit must reflect the approved snapshot. Keeping them separate makes it clear which artifact changed.
+- **Rescore** (labelled **Recalculate match** in the detail panel actions) and **Check tailored fit** are separate, manual actions. Rescore recalculates source fit; **Check tailored fit** recomputes the derived score from the approved snapshot and calls AI only on that explicit click.
+- Neither action runs on open. Opening a job or the Tailoring tab only performs deterministic reads of stored state; no AI is called.
+- Neither **Rescore** nor **Check tailored fit** sends email. Email is only sent from the explicit **Send email** confirmation in the Apply flow.
+
+How to use it:
+
+1. Open a job. The detail panel shows the source score ring and the compact **Derived tailored fit — job-specific** readout beside it.
+2. In the **Tailoring** tab, add a job description and approve a tailored CV snapshot if you have not already.
+3. Click **Check tailored fit** in the Tailoring tab. This explicitly calls AI to propose a score and notes, then validates the result against approved evidence before storing it.
+4. Read the score, summary, per-requirement statuses, evidence references, and snapshot version in the tailored-fit panel. The detail-panel readout updates after the check completes.
+5. If the snapshot, job description, evidence bank, or relevant profile fields change, the stored result is marked stale. Click **Check tailored fit** again to refresh it.
+
+Common problems:
+
+- **The detail panel says Not checked.** No tailored-fit result has been stored for this job yet. Approve a snapshot, then run **Check tailored fit**.
+- **The readout says Stale.** Inputs changed since the last check. The stored score is still shown for context, but you must run **Check tailored fit** again; staleness is computed by a deterministic read and never triggers AI on its own.
+- **A note has no evidence references.** References are stable IDs, not display labels. Deleting or renaming a Resume Studio item does not rewrite history. Recomputing drops invalid refs and reports a `covered` or `partial` note with no valid ref as `unsupported`; fix the evidence or wording, then recheck explicitly.
+- **Check tailored fit fails while the LLM is unavailable.** This is an error state, not a score: the previous stored result remains and no background retry or AI call happens on open. Try the check again when the provider is available.
+- **Check tailored fit is disabled.** A job description and an approved tailored CV snapshot are required first.
+- **I ran Rescore but tailored fit did not change.** Expected: Rescore affects only source fit. Use **Check tailored fit** for the derived score.
+
+Related pages:
+
+- [Tailoring review workflow](/docs/next/features/orchestrator#tailoring-review-workflow)
+- [Tailored CV snapshots](/docs/next/features/orchestrator#tailored-cv-snapshots)
+- [Resume Studio](/docs/next/features/design-resume)
+- [Career Evidence Bank in Settings](/docs/next/features/settings)
+- [Pipeline Run](/docs/next/features/pipeline-run)
+
 ### Generating PDFs
 
 PDF generation renders the most recently approved tailored CV snapshot and applies paper size and renderer settings to it. Previously generated PDFs become stale when fingerprint `v2` ships; regenerate them after upgrading.

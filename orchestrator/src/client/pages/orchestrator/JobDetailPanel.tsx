@@ -14,6 +14,7 @@ import { useJobPdfViewer } from "@client/components/pdf/JobPdfViewerProvider";
 import { Tip } from "@client/components/Tip";
 import { TooltipWhenDisabled } from "@client/components/TooltipWhenDisabled";
 import { getTailoringReadiness } from "@client/components/tailoring/rules";
+import { TailoredFitSummary } from "@client/components/tailoring/TailoredFitSummary";
 import { TailoringWorkspace } from "@client/components/tailoring/TailoringWorkspace";
 import {
   useMarkAsAppliedMutation,
@@ -21,6 +22,7 @@ import {
 } from "@client/hooks/queries/useJobMutations";
 import { useRescoreJob } from "@client/hooks/useRescoreJob";
 import { useSettings } from "@client/hooks/useSettings";
+import { useTailoredFit } from "@client/hooks/useTailoredFit";
 import { uploadJobPdfFromFile } from "@client/lib/job-pdf-upload";
 import {
   getPdfActionLabels,
@@ -310,6 +312,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const skipJobMutation = useSkipJobMutation();
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
   const { settings } = useSettings();
+  const {
+    state: tailoredFitState,
+    isLoading: isTailoredFitLoading,
+    refetch: refetchTailoredFit,
+  } = useTailoredFit(selectedJob?.id ?? "");
 
   const jobLink = selectedJob
     ? selectedJob.applicationLink || selectedJob.jobUrl
@@ -358,8 +365,9 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     [selectedJob, effectiveSelectedProjectIds],
   );
   const applicationKitReady = tailoringReadiness.isReady;
-  const readinessCheck = (id: (typeof tailoringReadiness.checks)[number]["id"]) =>
-    tailoringReadiness.checks.find((check) => check.id === id);
+  const readinessCheck = (
+    id: (typeof tailoringReadiness.checks)[number]["id"],
+  ) => tailoringReadiness.checks.find((check) => check.id === id);
   const brief = parseJobBrief(selectedJob?.jobBrief || null);
 
   const loadCatalog = useCallback(async () => {
@@ -397,6 +405,14 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
       onSelectJobId(nextJob?.id ?? null);
     },
     [activeJobs, onSelectJobId],
+  );
+
+  const handleWorkspaceJobUpdated = useCallback(
+    async (job?: Job) => {
+      await onJobUpdated(job);
+      await refetchTailoredFit();
+    },
+    [onJobUpdated, refetchTailoredFit],
   );
 
   const handleSaveDescription = useCallback(
@@ -856,6 +872,26 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         }
       />
 
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg rounded-t-none border border-t-0 border-border/50 bg-muted/20 px-4 py-2">
+        <TailoredFitSummary
+          job={selectedJob}
+          state={tailoredFitState}
+          isComputing={false}
+          canCompute={false}
+          disabledReason="Check tailored fit from the Tailoring tab."
+          onCompute={() => undefined}
+          variant="compact"
+        />
+        {isTailoredFitLoading ? (
+          <output
+            className="text-[11px] text-muted-foreground"
+            aria-live="polite"
+          >
+            Loading derived fit…
+          </output>
+        ) : null}
+      </div>
+
       <div className="flex min-w-0 flex-col rounded-lg rounded-t-none border border-t-0 border-border/50 bg-card p-4">
         <TabsContent value="brief" className="space-y-4">
           {!brief && (
@@ -881,7 +917,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           <TailoringWorkspace
             mode="editor"
             job={selectedJob}
-            onUpdate={onJobUpdated}
+            onUpdate={handleWorkspaceJobUpdated}
             onDirtyChange={onPauseRefreshChange}
           />
         </TabsContent>

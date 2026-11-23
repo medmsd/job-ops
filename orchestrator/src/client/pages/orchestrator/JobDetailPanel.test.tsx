@@ -2,7 +2,7 @@ import * as api from "@client/api";
 import * as privatePdf from "@client/lib/private-pdf";
 import { renderWithQueryClient } from "@client/test/renderWithQueryClient";
 import { createAppSettings, createJob } from "@shared/testing/factories.js";
-import type { AppSettings, Job } from "@shared/types.js";
+import type { AppSettings, Job, TailoredFitState } from "@shared/types.js";
 import {
   act,
   fireEvent,
@@ -99,9 +99,13 @@ vi.mock("@client/hooks/useSettings", () => ({
 
 vi.mock("@client/components/tailoring/TailoringWorkspace", () => ({
   TailoringWorkspace: ({
+    job,
     onDirtyChange,
+    onUpdate,
   }: {
+    job: Job;
     onDirtyChange?: (isDirty: boolean) => void;
+    onUpdate?: (job?: Job) => void | Promise<void>;
   }) => (
     <div data-testid="tailoring-workspace">
       <button type="button" onClick={() => onDirtyChange?.(true)}>
@@ -109,6 +113,12 @@ vi.mock("@client/components/tailoring/TailoringWorkspace", () => ({
       </button>
       <button type="button" onClick={() => onDirtyChange?.(false)}>
         Mark tailoring clean
+      </button>
+      <button type="button" onClick={() => void onUpdate?.(job)}>
+        Save tailoring update
+      </button>
+      <button type="button" onClick={() => void onUpdate?.()}>
+        Save tailoring update without job
       </button>
     </div>
   ),
@@ -159,6 +169,13 @@ vi.mock("@client/api", () => ({
   skipJob: vi.fn(),
   getProfile: vi.fn().mockResolvedValue({}),
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
+  getTailoredFit: vi.fn().mockResolvedValue({
+    result: null,
+    isStale: false,
+    reason: "not_checked",
+  }),
+  computeTailoredFit: vi.fn(),
+  rescoreJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@client/lib/private-pdf", () => ({
@@ -230,6 +247,27 @@ const renderJobDetailPanel = async (props: JobDetailPanelTestProps) => {
 
 const getApplyPanel = () => screen.getByRole("tabpanel", { name: /apply/i });
 
+const notCheckedFitState: TailoredFitState = {
+  result: null,
+  isStale: false,
+  reason: "not_checked",
+};
+
+const checkedFitState: TailoredFitState = {
+  result: {
+    score: 78,
+    summary: "Strong job-specific match.",
+    notes: [],
+    snapshotId: "snapshot-1",
+    snapshotVersion: 1,
+    inputHash: "input-hash",
+    computedAt: 1,
+    model: null,
+  },
+  isStale: false,
+  reason: null,
+};
+
 describe("JobDetailPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -237,6 +275,7 @@ describe("JobDetailPanel", () => {
     mockSettings.renderMarkdownInJobDescriptions = true;
     vi.mocked(api.getProfile).mockResolvedValue({});
     vi.mocked(api.getResumeProjectsCatalog).mockResolvedValue([]);
+    vi.mocked(api.getTailoredFit).mockResolvedValue(notCheckedFitState);
   });
 
   it("shows the selected job summary and safe links while full details load", async () => {
@@ -319,6 +358,109 @@ describe("JobDetailPanel", () => {
         "Base description extracted from the job listing, editable if something looks off. Used by the Ghostwriter and for fit assessment.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows the labelled compact derived-fit readout for a stored score", async () => {
+    vi.mocked(api.getTailoredFit).mockResolvedValue(checkedFitState);
+
+    await renderJobDetailPanel({
+      activeTab: "discovered",
+      activeJobs: [],
+      selectedJob: createJob({ id: "job-1", status: "discovered" }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(
+      screen.getByText("Derived tailored fit — job-specific"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("78/100")).toBeInTheDocument();
+    expect(api.getTailoredFit).toHaveBeenCalledWith("job-1");
+  });
+
+  it("shows Not checked and reads tailored fit with GET only on open", async () => {
+    await renderJobDetailPanel({
+      activeTab: "discovered",
+      activeJobs: [],
+      selectedJob: createJob({ id: "job-1", status: "discovered" }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(screen.getByText("Not checked")).toBeInTheDocument();
+    expect(api.getTailoredFit).toHaveBeenCalledTimes(1);
+    expect(api.computeTailoredFit).not.toHaveBeenCalled();
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /tailoring/i }));
+    expect(api.computeTailoredFit).not.toHaveBeenCalled();
+  });
+
+  it("keeps Recalculate match available as a manual action", async () => {
+    await renderJobDetailPanel({
+      activeTab: "discovered",
+      activeJobs: [],
+      selectedJob: createJob({ id: "job-1", status: "discovered" }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const recalculateMatch = screen.getByRole("menuitem", {
+      name: /recalculate match/i,
+    });
+    expect(recalculateMatch).toBeEnabled();
+
+    fireEvent.click(recalculateMatch);
+    await waitFor(() => expect(api.rescoreJob).toHaveBeenCalledWith("job-1"));
+    expect(api.computeTailoredFit).not.toHaveBeenCalled();
+  });
+
+  it("refetches tailored fit after a tailoring workspace update completes", async () => {
+    const onJobUpdated = vi.fn().mockResolvedValue(undefined);
+    const job = createJob({ id: "job-1", status: "discovered" });
+
+    await renderJobDetailPanel({
+      activeTab: "discovered",
+      activeJobs: [],
+      selectedJob: job,
+      onSelectJobId: vi.fn(),
+      onJobUpdated,
+    });
+
+    expect(api.getTailoredFit).toHaveBeenCalledTimes(1);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /tailoring/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Save tailoring update" }),
+    );
+
+    await waitFor(() => expect(onJobUpdated).toHaveBeenCalledWith(job));
+    await waitFor(() => expect(api.getTailoredFit).toHaveBeenCalledTimes(2));
+    expect(api.computeTailoredFit).not.toHaveBeenCalled();
+  });
+
+  it("still forwards no-argument tailoring updates to the parent", async () => {
+    const onJobUpdated = vi.fn().mockResolvedValue(undefined);
+
+    await renderJobDetailPanel({
+      activeTab: "discovered",
+      activeJobs: [],
+      selectedJob: createJob({ id: "job-1", status: "discovered" }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated,
+    });
+
+    expect(api.getTailoredFit).toHaveBeenCalledTimes(1);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /tailoring/i }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /save tailoring update without job/i,
+      }),
+    );
+
+    await waitFor(() => expect(onJobUpdated).toHaveBeenCalledWith(undefined));
+    await waitFor(() => expect(api.getTailoredFit).toHaveBeenCalledTimes(2));
+    expect(api.computeTailoredFit).not.toHaveBeenCalled();
   });
 
   it("counts must-include projects in the application kit", async () => {
