@@ -59,6 +59,7 @@ const actionBodySchema = z.object({
     .enum(POST_APPLICATION_PROVIDERS)
     .default(DEFAULT_POST_APPLICATION_PROVIDER),
   accountKey: z.string().min(1).max(255).default("default"),
+  jobId: z.string().uuid().optional(),
   decidedBy: z.string().max(255).optional(),
 });
 
@@ -197,6 +198,7 @@ postApplicationReviewRouter.post(
         action: input.action,
         provider: input.provider,
         accountKey: input.accountKey,
+        ...(input.jobId ? { jobId: input.jobId } : {}),
         decidedBy: input.decidedBy ?? null,
       });
 

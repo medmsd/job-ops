@@ -229,6 +229,93 @@ describe.sequential("Post-Application Review Workflow API", () => {
     expect(body.data.results[0].error.code).toBe("NO_SUGGESTED_MATCH");
   });
 
+  it("scopes a bulk action to the requested jobId", async () => {
+    const target = await seedPendingMessage();
+    const other = await seedPendingMessage();
+
+    const res = await fetch(`${baseUrl}/api/post-application/inbox/actions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "approve",
+        provider: "gmail",
+        accountKey: "default",
+        jobId: target.jobId,
+        decidedBy: "tester",
+      }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.requested).toBe(1);
+    expect(body.data.succeeded).toBe(1);
+    expect(body.data.results).toHaveLength(1);
+    expect(body.data.results[0].messageId).toBe(target.message.id);
+
+    const { getPostApplicationMessageById } = await import(
+      "@server/repositories/post-application-messages"
+    );
+    expect(
+      (await getPostApplicationMessageById(target.message.id))
+        ?.processingStatus,
+    ).toBe("manual_linked");
+    expect(
+      (await getPostApplicationMessageById(other.message.id))?.processingStatus,
+    ).toBe("pending_user");
+  });
+
+  it("keeps bulk actions account-wide when jobId is omitted", async () => {
+    const first = await seedPendingMessage();
+    const second = await seedPendingMessage();
+
+    const res = await fetch(`${baseUrl}/api/post-application/inbox/actions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "approve",
+        provider: "gmail",
+        accountKey: "default",
+        decidedBy: "tester",
+      }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.requested).toBe(2);
+    expect(body.data.succeeded).toBe(2);
+
+    const { getPostApplicationMessageById } = await import(
+      "@server/repositories/post-application-messages"
+    );
+    expect(
+      (await getPostApplicationMessageById(first.message.id))?.processingStatus,
+    ).toBe("manual_linked");
+    expect(
+      (await getPostApplicationMessageById(second.message.id))
+        ?.processingStatus,
+    ).toBe("manual_linked");
+  });
+
+  it("rejects an invalid jobId on a bulk action", async () => {
+    const res = await fetch(`${baseUrl}/api/post-application/inbox/actions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "deny",
+        provider: "gmail",
+        accountKey: "default",
+        jobId: "not-a-uuid",
+      }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+  });
+
   it("lists messages for a sync run", async () => {
     const { startPostApplicationSyncRun } = await import(
       "@server/repositories/post-application-sync-runs"

@@ -569,6 +569,7 @@ export const TrackingInboxPage: React.FC = () => {
           action,
           provider,
           accountKey,
+          ...(jobIdFilter ? { jobId: jobIdFilter } : {}),
         });
 
         const { succeeded, failed, skipped } = result;
@@ -610,7 +611,7 @@ export const TrackingInboxPage: React.FC = () => {
         setIsActionLoading(false);
       }
     },
-    [accountKey, visibleInbox.length, provider, refresh],
+    [accountKey, jobIdFilter, visibleInbox.length, provider, refresh],
   );
 
   const openInboxActionDialog = useCallback(
@@ -681,6 +682,8 @@ export const TrackingInboxPage: React.FC = () => {
   );
 
   const pendingCount = visibleInbox.length;
+  const jobScopeTitle = jobIdFilter ? " For This Job" : "";
+  const jobScopeDescription = jobIdFilter ? " for this job" : "";
   const jobFilterLabel = jobIdFilter ? (
     <Badge variant="outline" className="text-[10px]">
       Filtered to job {jobIdFilter}
@@ -1104,13 +1107,13 @@ export const TrackingInboxPage: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {inboxActionDialog.action === "approve"
-                ? "Approve All Messages?"
-                : "Ignore All Messages?"}
+                ? `Approve All Messages${jobScopeTitle}?`
+                : `Ignore All Messages${jobScopeTitle}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {inboxActionDialog.action === "approve"
-                ? `This will approve ${inboxActionDialog.itemCount} message${inboxActionDialog.itemCount === 1 ? "" : "s"} with suggested job matches. Messages without matches will be skipped.`
-                : `This will ignore all ${inboxActionDialog.itemCount} pending message${inboxActionDialog.itemCount === 1 ? "" : "s"}.`}
+                ? `This will approve ${inboxActionDialog.itemCount} message${inboxActionDialog.itemCount === 1 ? "" : "s"} with suggested job matches${jobScopeDescription}. Messages without matches will be skipped.`
+                : `This will ignore all ${inboxActionDialog.itemCount} pending message${inboxActionDialog.itemCount === 1 ? "" : "s"}${jobScopeDescription}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -174,7 +174,7 @@ The attachment is the tailored PDF JobOps already generated for that job. Files 
 
 ### Job shows a pending-response badge
 
-Follow the badge to `/tracking-inbox?jobId=<jobId>`. The inbox is filtered to that job for review only; you still choose whether to approve or ignore each message.
+Follow the badge to `/tracking-inbox?jobId=<jobId>`. The inbox is filtered to that job for review only; you still choose whether to approve or ignore each message. **Approve All** and **Ignore All** are scoped to that job while the filter is active.
 
 ### I prefer not to grant Gmail access
 

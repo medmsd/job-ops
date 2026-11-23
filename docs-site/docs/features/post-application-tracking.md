@@ -91,7 +91,7 @@ not supported.
 
 Open **Job → Emails** to review captured messages already linked to that job.
 
-When a job has pending responses, the tab header shows a **pending** badge. The badge links to `/tracking-inbox?jobId=<jobId>` and applies a read-only job filter; following the link never approves or changes a message.
+When a job has pending responses, the tab header shows a **pending** badge. The badge links to `/tracking-inbox?jobId=<jobId>` and applies a read-only job filter; following the link never approves or changes a message. While that filter is active, **Approve All** and **Ignore All** apply only to that job's pending messages.
 
 The tab is read-only. It shows stored metadata only: sender, subject, received
 time, snippet, processing status, message type, match confidence, account label,

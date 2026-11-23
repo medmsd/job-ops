@@ -62,6 +62,7 @@ export async function listPostApplicationInbox(args: {
   provider: PostApplicationProvider;
   accountKey: string;
   limit?: number;
+  jobId?: string;
 }): Promise<PostApplicationInboxItem[]> {
   const limit = args.limit ?? 50;
   const messages = await listPostApplicationMessagesByProcessingStatus(
@@ -69,6 +70,7 @@ export async function listPostApplicationInbox(args: {
     args.accountKey,
     "pending_user",
     limit,
+    args.jobId,
   );
 
   const jobIds = Array.from(
@@ -289,12 +291,13 @@ export async function denyPostApplicationInboxItem(args: {
 export async function runPostApplicationInboxAction(
   args: PostApplicationActionRequest & { decidedBy?: string | null },
 ): Promise<PostApplicationActionResponse> {
-  const { provider, accountKey, action, decidedBy } = args;
+  const { provider, accountKey, action, decidedBy, jobId } = args;
 
   const pendingItems = await listPostApplicationInbox({
     provider,
     accountKey,
     limit: 1000,
+    ...(jobId ? { jobId } : {}),
   });
 
   const results: PostApplicationActionResult[] = [];

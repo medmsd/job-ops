@@ -27,6 +27,7 @@ describe("post-application tracking docs", () => {
     );
     expect(feature).toContain("pending-response badge");
     expect(feature).toContain("/tracking-inbox?jobId=");
+    expect(feature).toContain("apply only to that job's pending messages");
     expect(feature).not.toContain("Auto-linked to job");
     expect(feature).not.toContain("auto-processed");
 

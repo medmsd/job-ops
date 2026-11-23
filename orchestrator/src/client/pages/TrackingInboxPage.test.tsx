@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
@@ -15,6 +15,7 @@ vi.mock("../api", () => ({
   getJobs: vi.fn(),
   approvePostApplicationInboxItem: vi.fn(),
   denyPostApplicationInboxItem: vi.fn(),
+  runPostApplicationInboxAction: vi.fn(),
   getPostApplicationRunMessages: vi.fn(),
   postApplicationGmailOauthStart: vi.fn(),
   postApplicationGmailOauthExchange: vi.fn(),
@@ -297,5 +298,40 @@ describe("TrackingInboxPage", () => {
     expect(await screen.findByText("Matching response")).toBeInTheDocument();
     expect(screen.queryByText("Other response")).not.toBeInTheDocument();
     expect(screen.getByText(/filtered to job job-1/i)).toBeInTheDocument();
+  });
+
+  it("passes the active jobId filter to bulk actions", async () => {
+    vi.mocked(api.getPostApplicationInbox).mockResolvedValue({
+      items: [makeInboxItem()],
+      total: 1,
+    });
+    vi.mocked(api.runPostApplicationInboxAction).mockResolvedValue({
+      action: "approve",
+      requested: 1,
+      succeeded: 1,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/tracking-inbox?jobId=job-2"]}>
+        <TrackingInboxPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      (await screen.findAllByRole("button", { name: /approve all/i }))[0],
+    );
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /approve all/i }),
+    );
+
+    await waitFor(() =>
+      expect(api.runPostApplicationInboxAction).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "approve", jobId: "job-2" }),
+      ),
+    );
   });
 });

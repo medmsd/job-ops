@@ -372,6 +372,7 @@ export async function listPostApplicationMessagesByProcessingStatus(
   accountKey: string,
   processingStatus: PostApplicationProcessingStatus,
   limit = 50,
+  matchedJobId?: string,
 ): Promise<PostApplicationMessage[]> {
   const rows = await db
     .select()
@@ -381,6 +382,9 @@ export async function listPostApplicationMessagesByProcessingStatus(
         eq(postApplicationMessages.provider, provider),
         eq(postApplicationMessages.accountKey, accountKey),
         eq(postApplicationMessages.processingStatus, processingStatus),
+        ...(matchedJobId
+          ? [eq(postApplicationMessages.matchedJobId, matchedJobId)]
+          : []),
         messagesScopeFilter(),
       ),
     )

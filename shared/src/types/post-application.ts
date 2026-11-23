@@ -210,6 +210,8 @@ export interface PostApplicationActionRequest {
   action: PostApplicationAction;
   provider: PostApplicationProvider;
   accountKey: string;
+  /** When set, the bulk action only applies to this job's pending messages. */
+  jobId?: string;
 }
 
 export type PostApplicationActionResult =

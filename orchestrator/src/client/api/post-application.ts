@@ -248,6 +248,7 @@ export async function runPostApplicationInboxAction(input: {
   provider?: PostApplicationProvider;
   accountKey?: string;
   decidedBy?: string;
+  jobId?: string;
 }): Promise<PostApplicationActionResponse> {
   return fetchApi<PostApplicationActionResponse>(
     "/post-application/inbox/actions",
@@ -257,6 +258,7 @@ export async function runPostApplicationInboxAction(input: {
         action: input.action,
         provider: input.provider ?? DEFAULT_POST_APPLICATION_PROVIDER,
         accountKey: input.accountKey ?? "default",
+        ...(input.jobId ? { jobId: input.jobId } : {}),
         ...(input.decidedBy ? { decidedBy: input.decidedBy } : {}),
       }),
     },
