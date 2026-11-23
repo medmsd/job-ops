@@ -15,6 +15,7 @@ import type {
   JobPdfSource,
   JobStatus,
   JobsRevisionResponse,
+  TailoredFitNote,
   UpdateJobInput,
   UpdateJobNoteInput,
 } from "@shared/types";
@@ -41,6 +42,8 @@ import {
 } from "../tenancy/private-scope";
 
 const { jobNotes, jobs } = schema;
+
+const MAX_TAILORED_FIT_NOTES = 12;
 
 function jobsScopeFilter() {
   return privateDataScopeFilter(jobs);
@@ -106,6 +109,24 @@ function serializeLocationEvidence(
 ): string | null {
   if (!evidence) return null;
   return JSON.stringify(buildLocationEvidence(evidence));
+}
+
+function parseTailoredFitNotes(value: string | null): TailoredFitNote[] | null {
+  if (!value || value.trim() === "") return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.slice(0, MAX_TAILORED_FIT_NOTES) as TailoredFitNote[];
+  } catch {
+    return null;
+  }
+}
+
+function serializeTailoredFitNotes(
+  notes: TailoredFitNote[] | null,
+): string | null {
+  if (notes === null) return null;
+  return JSON.stringify(notes.slice(0, MAX_TAILORED_FIT_NOTES));
 }
 
 /**
@@ -652,7 +673,7 @@ export async function updateJob(
       throw new Error("UNIQUE constraint failed: jobs.job_url");
     }
   }
-  const { locationEvidence, ...updateFields } = input;
+  const { locationEvidence, tailoredFitNotes, ...updateFields } = input;
   const clearsBriefForDescriptionEdit =
     input.jobDescription !== undefined && input.jobBrief === undefined;
   const readyAtUpdate =
@@ -672,6 +693,9 @@ export async function updateJob(
     .update(jobs)
     .set({
       ...updateFields,
+      ...(tailoredFitNotes !== undefined
+        ? { tailoredFitNotes: serializeTailoredFitNotes(tailoredFitNotes) }
+        : {}),
       ...(clearsBriefForDescriptionEdit ? { jobBrief: null } : {}),
       ...(locationEvidence !== undefined
         ? { locationEvidence: serializeLocationEvidence(locationEvidence) }
@@ -927,6 +951,14 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     tailoredSkills: row.tailoredSkills ?? null,
     tailoredResumeSnapshotId: row.tailoredResumeSnapshotId ?? null,
     tailoredResumeVersion: row.tailoredResumeVersion ?? null,
+    tailoredFitScore: row.tailoredFitScore ?? null,
+    tailoredFitNotes: parseTailoredFitNotes(row.tailoredFitNotes),
+    tailoredFitSummary: row.tailoredFitSummary ?? null,
+    tailoredFitSnapshotId: row.tailoredFitSnapshotId ?? null,
+    tailoredFitSnapshotVersion: row.tailoredFitSnapshotVersion ?? null,
+    tailoredFitInputHash: row.tailoredFitInputHash ?? null,
+    tailoredFitComputedAt: row.tailoredFitComputedAt ?? null,
+    tailoredFitModel: row.tailoredFitModel ?? null,
     selectedProjectIds: row.selectedProjectIds ?? null,
     pdfPath: row.pdfPath,
     pdfSource: row.pdfSource ?? null,

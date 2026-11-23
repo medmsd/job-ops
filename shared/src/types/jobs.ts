@@ -1,5 +1,6 @@
 import type { ExtractorSourceId } from "../extractors";
 import type { LocationEvidence, LocationMatchResult } from "./location";
+import type { TailoredFitNote } from "./tailored-fit.js";
 
 export type { LocationEvidenceQuality } from "./location";
 
@@ -209,6 +210,14 @@ export interface Job {
   tailoredSkills: string | null; // Generated resume skills (JSON)
   tailoredResumeSnapshotId: string | null;
   tailoredResumeVersion: number | null;
+  tailoredFitScore: number | null;
+  tailoredFitNotes: TailoredFitNote[] | null;
+  tailoredFitSummary: string | null;
+  tailoredFitSnapshotId: string | null;
+  tailoredFitSnapshotVersion: number | null;
+  tailoredFitInputHash: string | null;
+  tailoredFitComputedAt: number | null;
+  tailoredFitModel: string | null;
   selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
   pdfSource: JobPdfSource | null; // Whether PDF was system-generated or user-uploaded
@@ -573,6 +582,14 @@ export interface UpdateJobInput {
   tailoredSkills?: string;
   tailoredResumeSnapshotId?: string | null;
   tailoredResumeVersion?: number | null;
+  tailoredFitScore?: number | null;
+  tailoredFitNotes?: TailoredFitNote[] | null;
+  tailoredFitSummary?: string | null;
+  tailoredFitSnapshotId?: string | null;
+  tailoredFitSnapshotVersion?: number | null;
+  tailoredFitInputHash?: string | null;
+  tailoredFitComputedAt?: number | null;
+  tailoredFitModel?: string | null;
   selectedProjectIds?: string;
   pdfPath?: string;
   pdfSource?: JobPdfSource | null;

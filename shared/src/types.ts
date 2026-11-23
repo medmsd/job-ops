@@ -20,6 +20,7 @@ export * from "./types/pipeline";
 export * from "./types/post-application";
 export * from "./types/recruiter-email";
 export * from "./types/settings";
+export * from "./types/tailored-fit";
 export * from "./types/tailored-resumes";
 export * from "./types/usage";
 export * from "./types/visa-sponsors";

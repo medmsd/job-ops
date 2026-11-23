@@ -11,6 +11,7 @@ export * from "./pipeline";
 export * from "./post-application";
 export * from "./recruiter-email";
 export * from "./settings";
+export * from "./tailored-fit";
 export * from "./tailored-resumes";
 export * from "./usage";
 export * from "./visa-sponsors";
