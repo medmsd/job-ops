@@ -6,6 +6,7 @@ import { resolveResumeProjectSelection } from "@shared/resume-projects";
 import { tailoredResumeFilename } from "@shared/tailored-document-filenames.js";
 import type {
   Job,
+  TailoredFitState,
   TailoredResumeSnapshot,
   TailoringPlanResult,
 } from "@shared/types.js";
@@ -46,6 +47,7 @@ import {
 } from "../tailoring-utils";
 import { getTailoringReadiness } from "./rules";
 import { TailoredCvEditor } from "./TailoredCvEditor";
+import { TailoredFitSummary } from "./TailoredFitSummary";
 import { TailoringRulesStrip } from "./TailoringRulesStrip";
 import type {
   TailoringBaseline,
@@ -230,6 +232,20 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
   const [isCheckingEvidence, setIsCheckingEvidence] = useState(false);
   const [checkedText, setCheckedText] = useState<string | null>(null);
   const [evidenceAcknowledged, setEvidenceAcknowledged] = useState(false);
+  const [fitState, setFitState] = useState<TailoredFitState>({
+    result: null,
+    isStale: false,
+    reason: "not_checked",
+  });
+  const [fitLoading, setFitLoading] = useState(false);
+  const [isComputingFit, setIsComputingFit] = useState(false);
+
+  const canComputeFit = Boolean(jobDescription.trim()) && Boolean(snapshot);
+  const fitDisabledReason = !jobDescription.trim()
+    ? "Add a job description to check tailored fit."
+    : !snapshot
+      ? "Approve a tailored CV snapshot to check tailored fit."
+      : null;
 
   const currentEvidenceText = useMemo(
     () => `${summary}\n${headline}\n${skillsJson}`,
@@ -270,6 +286,28 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
         if (!cancelled) {
           setSnapshotError("Unable to load tailored CV versions.");
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.job.id]);
+
+  // Tailored fit is a deterministic read on job open; it never triggers AI.
+  useEffect(() => {
+    let cancelled = false;
+    setFitLoading(true);
+    api
+      .getTailoredFit(props.job.id)
+      .then((nextFitState) => {
+        if (!cancelled) setFitState(nextFitState);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFitState({ result: null, isStale: false, reason: "not_checked" });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFitLoading(false);
       });
     return () => {
       cancelled = true;
@@ -660,7 +698,13 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     } finally {
       setIsApprovingSnapshot(false);
     }
-  }, [flushAutosave, isApprovingSnapshot, props.job.id, props.job.jobDescription, props.onUpdate]);
+  }, [
+    flushAutosave,
+    isApprovingSnapshot,
+    props.job.id,
+    props.job.jobDescription,
+    props.onUpdate,
+  ]);
 
   const handleSnapshotSaved = useCallback(
     async (
@@ -685,6 +729,28 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     },
     [props.onUpdate],
   );
+
+  const handleComputeFit = useCallback(async () => {
+    if (!canComputeFit || isComputingFit) return;
+    setIsComputingFit(true);
+    try {
+      await flushAutosave();
+      const updatedJob = await api.computeTailoredFit(props.job.id);
+      await props.onUpdate(updatedJob);
+      const refreshed = await api.getTailoredFit(props.job.id);
+      if (isMountedRef.current) setFitState(refreshed);
+    } catch (error) {
+      showErrorToast(error, "Tailored-fit check failed");
+    } finally {
+      if (isMountedRef.current) setIsComputingFit(false);
+    }
+  }, [
+    canComputeFit,
+    flushAutosave,
+    isComputingFit,
+    props.job.id,
+    props.onUpdate,
+  ]);
 
   const handlePreviewPdf = useCallback(() => {
     if (!props.job.pdfPath || isGeneratingPdf) return;
@@ -765,7 +831,13 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
       else setSkillsDraft(originalValues.skillsDraft);
       dismissSuggestion(key);
     },
-    [originalValues, setSummary, setHeadline, setSkillsDraft, dismissSuggestion],
+    [
+      originalValues,
+      setSummary,
+      setHeadline,
+      setSkillsDraft,
+      dismissSuggestion,
+    ],
   );
 
   const handleCheckEvidence = useCallback(async () => {
@@ -838,26 +910,23 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
     [plan, setSummary, setHeadline, setSkillsDraft],
   );
 
-  const handleEditPlanItem = useCallback(
-    (index: number, wording: string) => {
-      const cleaned = wording.trim();
-      if (!cleaned) return;
-      setPlan((current) =>
-        current
-          ? {
-              ...current,
-              items: current.items.map((entry, i) =>
-                i === index
-                  ? { ...entry, proposedWording: cleaned, userDecision: "edited" }
-                  : entry,
-              ),
-            }
-          : current,
-      );
-      setEvidenceAcknowledged(false);
-    },
-    [],
-  );
+  const handleEditPlanItem = useCallback((index: number, wording: string) => {
+    const cleaned = wording.trim();
+    if (!cleaned) return;
+    setPlan((current) =>
+      current
+        ? {
+            ...current,
+            items: current.items.map((entry, i) =>
+              i === index
+                ? { ...entry, proposedWording: cleaned, userDecision: "edited" }
+                : entry,
+            ),
+          }
+        : current,
+    );
+    setEvidenceAcknowledged(false);
+  }, []);
 
   const handleRejectPlanItem = useCallback((index: number) => {
     setPlan((current) =>
@@ -1095,9 +1164,11 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
                   ? "Ready for PDF generation. Review the optional sections before applying."
                   : `To generate a PDF, complete: ${tailoringReadiness.missingLabels
                       .filter((label) =>
-                        ["Tailored summary", "Tailored headline", "Tailored skills"].includes(
-                          label,
-                        ),
+                        [
+                          "Tailored summary",
+                          "Tailored headline",
+                          "Tailored skills",
+                        ].includes(label),
                       )
                       .join(", ")}.`}
               </p>
@@ -1196,6 +1267,16 @@ export const TailoringWorkspace: React.FC<TailoringWorkspaceProps> = (
           )}
         </div>
       </div>
+
+      <TailoredFitSummary
+        job={props.job}
+        state={fitState}
+        isComputing={isComputingFit}
+        canCompute={canComputeFit && !fitLoading}
+        disabledReason={fitDisabledReason}
+        onCompute={handleComputeFit}
+        variant="panel"
+      />
 
       <TailoringRulesStrip
         language={resolvedLanguage}
