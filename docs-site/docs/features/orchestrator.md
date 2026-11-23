@@ -224,7 +224,43 @@ Related pages:
 - [Settings](/docs/next/features/settings)
 - [Ghostwriter](/docs/next/features/ghostwriter)
 
+### Tailored CV snapshots
+
+What it is:
+
+- A tailored CV snapshot is a durable, versioned copy of your per-job CV, built from the Resume Studio baseline plus the current summary, headline, tailored skills, and selected projects.
+- Each job keeps its own snapshot history. The newest 10 approved versions are retained.
+- Snapshots are tenant- and user-scoped; one job's CV is never visible to another workspace.
+
+Why it exists:
+
+- PDFs must render exactly the text you approved. Before snapshots, tailoring happened in memory at PDF time with no durable artifact and no history.
+- Approval makes the CV explicit: no snapshot is created by opening a job, editing a field, previewing an email, or generating a PDF.
+- Version history lets you compare what changed and return to an earlier CV without losing later versions.
+
+How to use it:
+
+1. Open the job's **Tailoring** tab and finish the summary, headline, and skills. A job description is required.
+2. Click **Approve snapshot** (or **Update snapshot** for later versions). This creates a new version and does not call AI.
+3. Click **Open full tailored CV** to edit basics, summary, skills, and item sections. **Save edits** creates a new version; **Restore** beside an older version copies that text into a new latest version. Neither action deletes history.
+4. Review **Changes from baseline** in the editor to see what the snapshot changed and why (headline, summary, skills, project visibility).
+5. Generate the PDF. **Generate PDF** stays disabled until the job references the currently approved snapshot and all edits are saved.
+
+Common problems:
+
+- **Approve snapshot is disabled.** Write a job description, complete the summary/headline/skills readiness checks, and clear any evidence blockers first.
+- **The PDF is stale after approving or editing a CV.** Regenerate it. PDF fingerprints include the snapshot ID and version (fingerprint `v2`), so previously generated PDFs become stale when this release ships.
+- **The app says the approved tailored CV is no longer available.** Approve a new snapshot before generating a PDF.
+
+Related pages:
+
+- [Resume Studio](/docs/next/features/design-resume)
+- [Career Evidence Bank in Settings](/docs/next/features/settings)
+- [Microsoft Graph OAuth Setup](/docs/next/getting-started/microsoft-graph-oauth-setup)
+
 ### Generating PDFs
+
+PDF generation renders the most recently approved tailored CV snapshot and applies paper size and renderer settings to it. Previously generated PDFs become stale when fingerprint `v2` ships; regenerate them after upgrading.
 
 PDF generation uses:
 
