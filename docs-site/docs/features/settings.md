@@ -183,7 +183,7 @@ Use **Settings → Career Evidence → Evidence Bank** to record verified career
 - Add target roles, core skills (with years, level, aliases, and evidence refs), and achievements (with a metric and evidence refs).
 - Add terms to **Always include**, **Never claim**, **Preferred terms**, and **Avoid terms**.
 - Evidence refs are stable IDs from Resume Studio, for example `project:payments-platform`. Bank-owned achievements use `bank:<achievement-id>`.
-- A warning lists refs that no longer resolve after a project is deleted or renamed. Saving is never blocked by a dangling ref.
+- A warning lists refs that no longer resolve after a project is deleted or renamed. Refs are checked against the local Resume Studio profile used for tailoring, not the optional Reactive Resume preview catalog. Saving is never blocked by a dangling ref.
 - Use **Reset to default** to clear the bank.
 
 Defaults and constraints:

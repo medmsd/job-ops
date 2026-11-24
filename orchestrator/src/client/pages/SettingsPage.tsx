@@ -1731,7 +1731,7 @@ export const SettingsPage: React.FC = () => {
           values={careerEvidence}
           isLoading={isLoading}
           isSaving={isSaving}
-          profileProjects={effectiveProfileProjects}
+          profileProjects={profileProjects}
           layoutMode="panel"
         />
       );

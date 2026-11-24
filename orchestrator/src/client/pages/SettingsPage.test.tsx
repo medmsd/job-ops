@@ -1,6 +1,7 @@
 import { getDefaultPromptTemplate } from "@shared/prompt-template-definitions.js";
 import { createAppSettings } from "@shared/testing/factories.js";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { createEmptyCareerEvidenceBank } from "@shared/types/career-evidence.js";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -170,6 +171,11 @@ const openPromptTemplatesSection = async () => {
 const openReactiveResumeSection = async () => {
   await openNavGroup(/^integrations$/i);
   await clickLastButtonByName(/reactive resume/i);
+};
+
+const openCareerEvidenceSection = async () => {
+  await openNavGroup(/^career evidence$/i);
+  await clickLastButtonByName(/evidence bank/i);
 };
 
 const openDisplaySection = async () => {
@@ -732,6 +738,78 @@ describe("SettingsPage", () => {
 
     const saveButton = getSaveButton();
     await waitFor(() => expect(saveButton).toBeDisabled());
+  });
+
+  it("checks Evidence Bank refs against local Resume Studio projects even when an RxResume base resume is configured", async () => {
+    let resolveProjects: (projects: Awaited<ReturnType<typeof api.getRxResumeProjects>>) => void =
+      () => {};
+    const projectsPromise = new Promise<
+      Awaited<ReturnType<typeof api.getRxResumeProjects>>
+    >((resolve) => {
+      resolveProjects = resolve;
+    });
+    vi.mocked(api.getRxResumeProjects).mockReturnValue(projectsPromise);
+    vi.mocked(api.validateRxresume).mockResolvedValue({
+      valid: true,
+      message: null,
+      status: 200,
+    });
+    vi.mocked(api.getSettings).mockResolvedValue(
+      createAppSettings({
+        rxresumeApiKeyHint: "rr-v5",
+        rxresumeBaseResumeId: "resume-123",
+        profileProjects: [
+          {
+            id: "proj-1",
+            name: "Project One",
+            description: "Desc 1",
+            date: "2024",
+            isVisibleInBase: true,
+          },
+        ],
+        careerEvidence: {
+          value: {
+            ...createEmptyCareerEvidenceBank(),
+            coreSkills: [
+              {
+                name: "Java",
+                years: 5,
+                level: "",
+                evidence: ["project:proj-1"],
+                aliases: [],
+              },
+            ],
+          },
+          default: createEmptyCareerEvidenceBank(),
+          override: null,
+        },
+      }),
+    );
+
+    renderPage();
+    await openReactiveResumeSection();
+    await waitFor(() => expect(api.getRxResumeProjects).toHaveBeenCalled());
+    await act(async () => {
+      resolveProjects([
+        {
+          id: "rx-only-project",
+          name: "RxResume Only Project",
+          description: "",
+          date: "",
+          isVisibleInBase: true,
+        },
+      ]);
+    });
+
+    await openCareerEvidenceSection();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Known refs:/)).toHaveTextContent("project:proj-1"),
+    );
+    expect(screen.getByText(/Known refs:/)).not.toHaveTextContent(
+      "project:rx-only-project",
+    );
+    expect(screen.queryByTestId("dangling-evidence-refs")).toBeNull();
   });
 
   it("does not clear the model override when saving an unrelated setting", async () => {
