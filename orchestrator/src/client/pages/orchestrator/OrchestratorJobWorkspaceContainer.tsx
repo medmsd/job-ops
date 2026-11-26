@@ -4,6 +4,7 @@ import type { Job, JobListItem, JobStatus } from "@shared/types.js";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { VirtualListHandle } from "@/client/lib/virtual-list";
+import { getBulkTailorJobIds } from "./bulkTailorPdf";
 import type { FilterTab } from "./constants";
 import { tabs } from "./constants";
 import { FloatingJobActionsBar } from "./FloatingJobActionsBar";
@@ -104,6 +105,15 @@ export const OrchestratorJobWorkspaceContainer: React.FC<
     activeTab: navigation.activeTab,
     loadJobs,
   });
+
+  const handleBulkTailorPdf = useCallback(
+    (limit: number) => {
+      const jobIds = getBulkTailorJobIds(activeJobs, limit);
+      if (jobIds.length === 0) return;
+      void runJobAction("move_to_ready", jobIds);
+    },
+    [activeJobs, runJobAction],
+  );
 
   useEffect(() => {
     if (isLoading || filters.sourceFilter === "all") return;
@@ -248,6 +258,8 @@ export const OrchestratorJobWorkspaceContainer: React.FC<
           sort={filters.sort}
           filteredCount={activeJobs.length}
           isFiltersOpen={ui.isFiltersOpen}
+          bulkTailorPdfInFlight={jobActionInFlight !== null}
+          onBulkTailorPdf={handleBulkTailorPdf}
           jobListHandleRef={jobListHandleRef}
           primaryEmptyStateAction={primaryEmptyStateAction}
           secondaryEmptyStateAction={secondaryEmptyStateAction}

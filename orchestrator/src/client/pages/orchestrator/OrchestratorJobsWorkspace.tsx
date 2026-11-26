@@ -1,6 +1,7 @@
 import type { VirtualListHandle } from "@client/lib/virtual-list";
 import type { Job, JobListItem, JobSource, JobStatus } from "@shared/types.js";
 import type React from "react";
+import { BulkTailorPdfControl } from "./BulkTailorPdfControl";
 import type {
   EmploymentType,
   FilterTab,
@@ -50,6 +51,7 @@ interface OrchestratorJobsWorkspaceProps {
   sort: JobSort;
   filteredCount: number;
   isFiltersOpen: boolean;
+  bulkTailorPdfInFlight: boolean;
   jobListHandleRef: React.Ref<VirtualListHandle>;
   primaryEmptyStateAction?: EmptyStateAction;
   secondaryEmptyStateAction?: EmptyStateAction;
@@ -75,6 +77,7 @@ interface OrchestratorJobsWorkspaceProps {
   onJobUpdated: (job?: Job) => Promise<void>;
   onPauseRefreshChange: (paused: boolean) => void;
   onRetrySelectedJob: () => void;
+  onBulkTailorPdf: (limit: number) => void;
 }
 
 export const OrchestratorJobsWorkspace: React.FC<
@@ -107,6 +110,7 @@ export const OrchestratorJobsWorkspace: React.FC<
   sort,
   filteredCount,
   isFiltersOpen,
+  bulkTailorPdfInFlight,
   jobListHandleRef,
   primaryEmptyStateAction,
   secondaryEmptyStateAction,
@@ -132,6 +136,7 @@ export const OrchestratorJobsWorkspace: React.FC<
   onJobUpdated,
   onPauseRefreshChange,
   onRetrySelectedJob,
+  onBulkTailorPdf,
 }) => (
   <>
     <OrchestratorSummary stats={stats} isPipelineRunning={isPipelineRunning} />
@@ -173,6 +178,14 @@ export const OrchestratorJobsWorkspace: React.FC<
         onResetFilters={onResetFilters}
         filteredCount={filteredCount}
       />
+
+      {activeTab === "discovered" && (
+        <BulkTailorPdfControl
+          jobCount={activeJobs.length}
+          inFlight={bulkTailorPdfInFlight}
+          onProcess={onBulkTailorPdf}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
         <JobListPanel
