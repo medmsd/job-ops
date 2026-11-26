@@ -117,8 +117,10 @@ export function useJobSelectionActions({
   }, []);
 
   const runJobAction = useCallback(
-    async (action: JobAction) => {
-      const selectedAtStart = Array.from(selectedJobIds);
+    async (action: JobAction, explicitJobIds?: string[]) => {
+      const selectedAtStart = explicitJobIds
+        ? Array.from(new Set(explicitJobIds))
+        : Array.from(selectedJobIds);
       if (selectedAtStart.length === 0) return;
       if (selectedAtStart.length > MAX_JOB_ACTION_JOB_IDS) {
         toast.error(

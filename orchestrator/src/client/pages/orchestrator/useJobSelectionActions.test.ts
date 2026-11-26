@@ -267,4 +267,52 @@ describe("useJobSelectionActions", () => {
     );
     expect(toast.success).toHaveBeenCalledWith("2 matches recalculated");
   });
+
+  it("runs an action against explicitly supplied job IDs, deduped and in order", async () => {
+    const activeJobs = [
+      createJob({ id: "job-1", status: "discovered" }),
+      createJob({ id: "job-2", status: "discovered" }),
+      createJob({ id: "job-3", status: "discovered" }),
+    ];
+    const loadJobs = vi.fn().mockResolvedValue(undefined);
+    mockStreamJobAction({
+      action: "move_to_ready",
+      requested: 2,
+      succeeded: 2,
+      failed: 0,
+      results: [
+        {
+          jobId: "job-3",
+          ok: true,
+          job: createJob({ id: "job-3", status: "ready" }),
+        },
+        {
+          jobId: "job-1",
+          ok: true,
+          job: createJob({ id: "job-1", status: "ready" }),
+        },
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useJobSelectionActions({
+        activeJobs,
+        activeTab: "discovered",
+        loadJobs,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runJobAction("move_to_ready", [
+        "job-3",
+        "job-1",
+        "job-3",
+      ]);
+    });
+
+    expect(api.streamJobAction).toHaveBeenCalledWith(
+      { action: "move_to_ready", jobIds: ["job-3", "job-1"] },
+      expect.any(Object),
+    );
+  });
 });
