@@ -36,6 +36,17 @@ Available actions depend on selected job statuses:
 - **Recalculate match**
 - **Clear** (clears selection)
 
+### Bulk tailor and PDF (discovered tab)
+
+On the **Discovered** tab, a toolbar control above the job list can process a batch without selecting rows:
+
+1. Enter the number of jobs to process (default `10`, allowed range `1–500`).
+2. Click **Tailor & generate PDF**.
+
+The control processes the first N jobs in the current filtered/sorted order. Each job is AI-tailored against your approved Career Evidence Bank, a tailored PDF is generated, and the job moves to **Ready**. Jobs that fail stay selected so you can retry them. The button is disabled while a batch is running.
+
+This uses the same engine as **Move to Ready**; it is an explicit action, so no AI runs when you merely open a job or the tailoring view.
+
 ## Keyboard workflow
 
 Use shortcuts from the Jobs page:
@@ -51,8 +62,8 @@ Use shortcuts from the Jobs page:
 
 ## Important limits and behavior
 
-- Bulk actions are capped at **100 jobs per run**.
-- `Select all filtered` also respects the same 100-job cap.
+- Bulk actions are capped at **500 jobs per run**.
+- `Select all filtered` also respects the same 500-job cap.
 - Selection resets when you switch tabs.
 - If jobs disappear from the active filtered list, they are removed from selection automatically.
 
