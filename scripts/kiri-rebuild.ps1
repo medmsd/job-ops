@@ -40,6 +40,20 @@ function Invoke-Docker {
   }
 }
 
+function Get-GithubToken {
+  $fromEnv = $env:GITHUB_TOKEN
+  if ($fromEnv) {
+    $trimmed = $fromEnv.Trim()
+    if ($trimmed) { return $trimmed }
+  }
+
+  if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return "" }
+
+  $lines = @(& gh auth token --hostname github.com 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) { return "" }
+  return ($lines -join "").Trim()
+}
+
 # Kiri bundles buildx but may not have registered it with the Docker CLI yet.
 if (-not (docker buildx version 2>$null)) {
   $kiriPlugin = Join-Path $env:LOCALAPPDATA "Kiri\bin\cli-plugins\docker-buildx.exe"
@@ -62,7 +76,28 @@ if ($SkipBuild) {
   Write-Host "Using existing build: $sourceTag"
 } else {
   Write-Host "Building $sourceTag from Dockerfile..."
-  Invoke-Docker @("buildx", "build", "--load", "--target", "production", "-t", $sourceTag, ".")
+  $secretFile = $null
+  try {
+    $githubToken = Get-GithubToken
+    $buildArgs = @("buildx", "build", "--load", "--target", "production", "-t", $sourceTag)
+    if ($githubToken) {
+      $secretFile = [System.IO.Path]::GetTempFileName()
+      [System.IO.File]::WriteAllText(
+        $secretFile,
+        $githubToken,
+        [System.Text.UTF8Encoding]::new($false)
+      )
+      $buildArgs += @("--secret", "id=github_token,src=$secretFile")
+    } else {
+      Write-Host "No GitHub token available; Camoufox will use anonymous GitHub API access."
+    }
+    $buildArgs += "."
+    Invoke-Docker -DockerArgs $buildArgs
+  } finally {
+    if ($secretFile -and (Test-Path $secretFile)) {
+      Remove-Item $secretFile -Force
+    }
+  }
 }
 
 # tmp/ is gitignored; the scratch stage needs only this one generated Dockerfile.
